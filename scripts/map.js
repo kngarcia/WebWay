@@ -8,7 +8,6 @@ class MapView {
         try {
             await this.cargarDestino();
             this.mostrarInformacionDestino();
-            this.configurarNavegacion();
         } catch (error) {
             this.mostrarError('Error cargando destino: ' + error.message);
         }
@@ -48,11 +47,6 @@ class MapView {
             Latitud: <strong>${this.destino.Latitud.toFixed(6)}</strong><br>
             Longitud: <strong>${this.destino.Longitud.toFixed(6)}</strong>
         `;
-    }
-
-    configurarNavegacion() {
-        // Aquí integrarías con Google Maps o Leaflet en una implementación real
-        console.log('Integrar con API de mapas aquí');
     }
 
     mostrarError(mensaje) {

@@ -3,104 +3,242 @@
 <head>
   <meta charset="UTF-8">
   <meta name="viewport" content="width=device-width, initial-scale=1.0, user-scalable=no">
-  <title>AR Navigation - WebWay</title>
-  
-  <script src="https://cdnjs.cloudflare.com/ajax/libs/three.js/r128/three.min.js"></script>
-  <script src="https://cdnjs.cloudflare.com/ajax/libs/aframe/1.2.0/aframe.min.js"></script>
-  <!-- AR.js sin detección de marcadores, solo GPS -->
-  <script src="https://cdn.jsdelivr.net/gh/donmccurdy/aframe-extras@v6.1.1/dist/aframe-extras.min.js"></script>
+  <title>Compás AR - WebWay</title>
   
   <style>
-    body { margin: 0; padding: 0; overflow: hidden; background: #000; }
-    .loading {
-      position: fixed; top: 0; left: 0; width: 100%; height: 100%;
-      background: #000; color: white; display: flex; flex-direction: column;
-      justify-content: center; align-items: center; z-index: 1000;
+    body {
+      margin: 0;
+      padding: 0;
+      overflow: hidden;
+      background: #000;
+      font-family: Arial, sans-serif;
     }
-    .spinner {
-      width: 40px; height: 40px; border: 4px solid #333;
-      border-top: 4px solid #fff; border-radius: 50%;
-      animation: spin 1s linear infinite; margin-bottom: 20px;
+    
+    #camera-container {
+      position: fixed;
+      top: 0;
+      left: 0;
+      width: 100vw;
+      height: 100vh;
+      z-index: 1;
     }
-    @keyframes spin {
-      0% { transform: rotate(0deg); } 100% { transform: rotate(360deg); }
+    
+    #camera-video {
+      width: 100%;
+      height: 100%;
+      object-fit: cover;
     }
+    
+    #compass-overlay {
+      position: fixed;
+      top: 0;
+      left: 0;
+      width: 100vw;
+      height: 100vh;
+      z-index: 2;
+      pointer-events: none;
+    }
+    
+    #arrow-container {
+      position: absolute;
+      top: 50%;
+      left: 50%;
+      transform: translate(-50%, -50%);
+      transition: transform 0.1s ease;
+    }
+    
+    #direction-arrow {
+      width: 120px;
+      height: 120px;
+      filter: drop-shadow(0 0 10px rgba(0, 0, 0, 0.7));
+    }
+    
     .info-panel {
-      position: fixed; bottom: 20px; left: 50%; transform: translateX(-50%);
-      background: rgba(0, 0, 0, 0.9); color: white; padding: 15px;
-      border-radius: 10px; z-index: 1000; max-width: 90%; text-align: center;
+      position: fixed;
+      bottom: 20px;
+      left: 50%;
+      transform: translateX(-50%);
+      background: rgba(0, 0, 0, 0.85);
+      color: white;
+      padding: 15px 20px;
+      border-radius: 15px;
+      z-index: 3;
+      max-width: 90%;
+      text-align: center;
+      backdrop-filter: blur(10px);
+      border: 1px solid rgba(255, 255, 255, 0.1);
     }
-    .btn { padding: 10px 20px; background: #666; color: white; 
-           border: none; border-radius: 5px; margin: 5px; cursor: pointer; }
-    .debug-info { font-size: 12px; color: #ccc; margin-top: 10px; }
+    
+    .btn {
+      padding: 12px 24px;
+      background: #4CAF50;
+      color: white;
+      border: none;
+      border-radius: 8px;
+      margin: 8px 5px;
+      cursor: pointer;
+      font-size: 16px;
+      pointer-events: auto;
+    }
+    
+    .btn-secondary {
+      background: #666;
+    }
+    
+    .debug-info {
+      font-size: 12px;
+      color: #ccc;
+      margin-top: 10px;
+      line-height: 1.4;
+    }
+    
+    .loading {
+      position: fixed;
+      top: 0;
+      left: 0;
+      width: 100%;
+      height: 100%;
+      background: #000;
+      color: white;
+      display: flex;
+      flex-direction: column;
+      justify-content: center;
+      align-items: center;
+      z-index: 1000;
+    }
+    
+    .spinner {
+      width: 50px;
+      height: 50px;
+      border: 5px solid #333;
+      border-top: 5px solid #4CAF50;
+      border-radius: 50%;
+      animation: spin 1s linear infinite;
+      margin-bottom: 20px;
+    }
+    
+    @keyframes spin {
+      0% { transform: rotate(0deg); }
+      100% { transform: rotate(360deg); }
+    }
+    
+    .compass-ring {
+      position: absolute;
+      top: 50%;
+      left: 50%;
+      transform: translate(-50%, -50%);
+      width: 200px;
+      height: 200px;
+      border: 2px solid rgba(255, 255, 255, 0.3);
+      border-radius: 50%;
+      pointer-events: none;
+    }
+    
+    .north-indicator {
+      position: absolute;
+      top: 20%;
+      left: 50%;
+      transform: translateX(-50%);
+      color: white;
+      font-weight: bold;
+      font-size: 14px;
+      text-shadow: 0 0 5px rgba(0, 0, 0, 0.8);
+    }
+    
+    .distance-indicator {
+      position: absolute;
+      top: 70%;
+      left: 50%;
+      transform: translateX(-50%);
+      color: white;
+      font-size: 14px;
+      text-shadow: 0 0 5px rgba(0, 0, 0, 0.8);
+    }
   </style>
 </head>
 <body>
-  <div id="loading" class="loading">
-    <div class="spinner"></div>
-    <p>Inicializando AR con GPS...</p>
+  <!-- Contenedor de la cámara -->
+  <div id="camera-container">
+    <video id="camera-video" autoplay playsinline></video>
   </div>
 
-  <!-- Escena A-Frame simple SIN AR.js problemático -->
-  <a-scene
-    vr-mode-ui="enabled: false"
-    embedded
-    renderer="colorManagement: true;"
-    style="width: 100vw; height: 100vh;"
-  >
-    <!-- Cámara normal -->
-    <a-camera id="main-camera" position="0 1.6 0" wasd-controls="enabled: false">
-      <!-- Flecha de dirección como hijo de la cámara (siempre visible) -->
-      <a-entity 
-        id="direction-arrow"
-        geometry="primitive: cone; height: 0.5; radiusBottom: 0.1"
-        material="color: #3366FF; metalness: 0.3; roughness: 0.7"
-        position="0 0 -1"
-        rotation="-90 0 0"
-        scale="1 1 1"
-        visible="false"
-      ></a-entity>
-    </a-camera>
+  <!-- Overlay del compás -->
+  <div id="compass-overlay">
+    <div class="compass-ring"></div>
+    <div class="north-indicator">N</div>
+    <div id="arrow-container">
+      <svg id="direction-arrow" viewBox="0 0 100 100">
+        <!-- Flecha SVG -->
+        <defs>
+          <linearGradient id="arrowGradient" x1="0%" y1="0%" x2="100%" y2="100%">
+            <stop offset="0%" style="stop-color:#4CAF50;stop-opacity:1" />
+            <stop offset="100%" style="stop-color:#45a049;stop-opacity:1" />
+          </linearGradient>
+          <filter id="glow" x="-50%" y="-50%" width="200%" height="200%">
+            <feGaussianBlur in="SourceGraphic" stdDeviation="3" result="blur" />
+            <feMerge>
+              <feMergeNode in="blur"/>
+              <feMergeNode in="SourceGraphic"/>
+            </feMerge>
+          </filter>
+        </defs>
+        <path d="M50 10 L60 40 L80 40 L55 60 L60 90 L40 90 L45 60 L20 40 L40 40 Z" 
+              fill="url(#arrowGradient)" filter="url(#glow)" />
+      </svg>
+    </div>
+    <div class="distance-indicator" id="distance-text">-- m</div>
+  </div>
 
-    <!-- Sky (fondo) -->
-    <a-sky color="#000000"></a-sky>
-    
-    <!-- Grid para referencia (opcional) -->
-    <a-grid position="0 0 0" rotation="-90 0 0" width="10" height="10" color="#333333"></a-grid>
-  </a-scene>
-
+  <!-- Panel de información -->
   <div id="info" class="info-panel">
-    <h3>🚀 Navegación AR con GPS</h3>
-    <p>Buscando ubicación...</p>
+    <h3 style="margin: 0 0 10px 0;">🧭 Compás AR</h3>
+    <p id="status-text">Inicializando...</p>
     <div id="debug" class="debug-info"></div>
     <button class="btn" onclick="window.location.href='index.html'">Volver</button>
-    <button class="btn" id="test-mode-btn">Modo Prueba (50m)</button>
+    <button class="btn btn-secondary" id="calibrate-btn">Calibrar Brújula</button>
+  </div>
+
+  <!-- Loading -->
+  <div id="loading" class="loading">
+    <div class="spinner"></div>
+    <p>Inicializando compás AR...</p>
   </div>
 
   <script>
-    class SimpleARNavigation {
+    class ARCompass {
       constructor() {
         this.destino = null;
         this.userPosition = null;
         this.watchId = null;
-        this.directionArrow = null;
+        this.arrowContainer = null;
         this.infoDiv = null;
         this.debugDiv = null;
-        this.testMode = false;
-        this.testDestination = null;
-        this.currentRotation = 0;
+        this.statusText = null;
+        this.distanceText = null;
+        
+        // Variables de orientación
+        this.currentHeading = 0;
+        this.alpha = 0;
+        this.beta = 0;
+        this.gamma = 0;
+        this.calibrationOffset = 0;
+        
+        // Variables de destino
+        this.targetBearing = 0;
+        this.currentDistance = 0;
         
         this.init();
       }
 
       async init() {
         try {
-          console.log('🚀 Iniciando navegación AR simple...');
+          console.log('🧭 Iniciando Compás AR...');
           
           await this.cargarDestino();
           this.configurarElementos();
-          this.configurarBotones();
+          await this.iniciarCamara();
           this.iniciarGPS();
+          this.iniciarBrujula();
           
           setTimeout(() => {
             document.getElementById('loading').style.display = 'none';
@@ -123,7 +261,7 @@
             
             this.destino = JSON.parse(destinoData);
             console.log('🎯 Destino:', this.destino);
-            this.actualizarInfo(`🎯 <b>${this.destino.Nombre}</b><br>Buscando GPS...`);
+            this.actualizarEstado(`🎯 <b>${this.destino.Nombre}</b><br>Iniciando sensores...`);
             resolve();
             
           } catch (error) {
@@ -133,44 +271,58 @@
       }
 
       configurarElementos() {
-        this.directionArrow = document.getElementById('direction-arrow');
+        this.arrowContainer = document.getElementById('arrow-container');
         this.infoDiv = document.getElementById('info');
         this.debugDiv = document.getElementById('debug');
+        this.statusText = document.getElementById('status-text');
+        this.distanceText = document.getElementById('distance-text');
         
-        // Configurar controles de mirada para móvil
-        const camera = document.getElementById('main-camera');
-        camera.setAttribute('look-controls', {
-          enabled: true,
-          pointerLockEnabled: false
+        // Botón de calibración
+        document.getElementById('calibrate-btn').addEventListener('click', () => {
+          this.calibrarBrujula();
         });
       }
 
-      configurarBotones() {
-        document.getElementById('test-mode-btn').addEventListener('click', () => {
-          this.activarModoPrueba();
-        });
-      }
-
-      activarModoPrueba() {
-        if (!this.userPosition) {
-          alert('Espera a tener ubicación GPS primero');
-          return;
+      async iniciarCamara() {
+        try {
+          console.log('📷 Iniciando cámara...');
+          
+          const stream = await navigator.mediaDevices.getUserMedia({ 
+            video: {
+              facingMode: 'environment',
+              width: { ideal: 1280 },
+              height: { ideal: 720 }
+            },
+            audio: false
+          });
+          
+          const video = document.getElementById('camera-video');
+          video.srcObject = stream;
+          
+          await new Promise((resolve) => {
+            video.onloadedmetadata = () => {
+              video.play();
+              resolve();
+            };
+          });
+          
+          console.log('✅ Cámara iniciada correctamente');
+          
+        } catch (error) {
+          console.error('❌ Error de cámara:', error);
+          throw new Error(this.getCameraErrorMessage(error));
         }
-        
-        this.testMode = true;
-        
-        const userLat = this.userPosition.coords.latitude;
-        const userLon = this.userPosition.coords.longitude;
-        
-        // Destino a 50 metros al noreste
-        this.testDestination = {
-          Nombre: `${this.destino.Nombre} (PRUEBA - 50m)`,
-          Latitud: userLat + 0.00045,
-          Longitud: userLon + 0.00045
-        };
-        
-        this.actualizarInfo(`🔧 <b>MODO PRUEBA ACTIVADO</b><br>Destino a 50 metros`);
-        console.log('📍 Modo prueba - Destino:', this.testDestination);
+      }
+
+      getCameraErrorMessage(error) {
+        switch(error.name) {
+          case 'NotAllowedError':
+            return 'Permiso de cámara denegado. Por favor, permite el acceso a la cámara.';
+          case 'NotFoundError':
+            return 'No se encontró cámara trasera.';
+          default:
+            return 'Error accediendo a la cámara: ' + error.message;
+        }
       }
 
       iniciarGPS() {
@@ -192,22 +344,75 @@
         );
       }
 
+      iniciarBrujula() {
+        if (typeof DeviceOrientationEvent === 'undefined') {
+          this.mostrarError('Tu dispositivo no soporta brújula');
+          return;
+        }
+
+        // Solicitar permisos en iOS
+        if (typeof DeviceOrientationEvent.requestPermission === 'function') {
+          DeviceOrientationEvent.requestPermission()
+            .then(permissionState => {
+              if (permissionState === 'granted') {
+                window.addEventListener('deviceorientation', this.actualizarOrientacion.bind(this));
+              } else {
+                this.mostrarError('Se necesitan permisos de orientación para la brújula');
+              }
+            })
+            .catch(error => {
+              console.error('Error permisos brújula:', error);
+              this.mostrarError('Error al acceder a la brújula');
+            });
+        } else {
+          // Android y otros navegadores
+          window.addEventListener('deviceorientation', this.actualizarOrientacion.bind(this));
+        }
+      }
+
+      actualizarOrientacion(event) {
+        this.alpha = event.alpha; // 0-360, around z-axis (compass)
+        this.beta = event.beta;   // -180 to 180, front-to-back
+        this.gamma = event.gamma; // -90 to 90, left-to-right
+
+        // Calcular heading (brújula)
+        if (event.absolute === true && event.alpha !== null) {
+          this.currentHeading = event.alpha;
+        } else if (event.webkitCompassHeading) {
+          // Safari en iOS
+          this.currentHeading = event.webkitCompassHeading;
+        } else if (event.alpha !== null) {
+          this.currentHeading = 360 - event.alpha; // Ajuste para mayoría de dispositivos
+        }
+
+        // Aplicar calibración
+        this.currentHeading = (this.currentHeading + this.calibrationOffset + 360) % 360;
+        
+        this.actualizarFlecha();
+        this.actualizarDebugInfo();
+      }
+
+      calibrarBrujula() {
+        // En una implementación real, aquí harías que el usuario gire el dispositivo
+        // en forma de "8" para calibrar. Por ahora, simplemente resetemos el offset.
+        this.calibrationOffset = 0;
+        this.actualizarEstado('🔧 Brújula calibrada. Apunta la flecha verde hacia el destino.');
+      }
+
       actualizarPosicionUsuario(position) {
         this.userPosition = position;
         const userLat = position.coords.latitude;
         const userLon = position.coords.longitude;
         const accuracy = position.coords.accuracy;
         
-        const destinoActual = this.testMode ? this.testDestination : this.destino;
+        this.currentDistance = this.calcularDistancia(userLat, userLon, this.destino.Latitud, this.destino.Longitud);
+        this.targetBearing = this.calcularRumbo(userLat, userLon, this.destino.Latitud, this.destino.Longitud);
         
-        const distancia = this.calcularDistancia(userLat, userLon, destinoActual.Latitud, destinoActual.Longitud);
-        const rumbo = this.calcularRumbo(userLat, userLon, destinoActual.Latitud, destinoActual.Longitud);
+        this.actualizarInterfaz(this.currentDistance, this.targetBearing, accuracy);
+        this.actualizarFlecha();
         
-        this.actualizarInterfaz(distancia, rumbo, destinoActual, accuracy);
-        this.actualizarFlechaDireccion(rumbo, distancia);
-        
-        if (distancia < 15) {
-          this.llegadaDestino(destinoActual);
+        if (this.currentDistance < 10) {
+          this.llegadaDestino();
         }
       }
 
@@ -239,75 +444,77 @@
         return (θ * 180 / Math.PI + 360) % 360;
       }
 
-      actualizarInterfaz(distancia, rumbo, destino, accuracy) {
+      actualizarInterfaz(distancia, rumbo, accuracy) {
         let distanciaTexto;
         if (distancia < 1000) {
-          distanciaTexto = `${Math.round(distancia)} metros`;
+          distanciaTexto = `${Math.round(distancia)} m`;
         } else {
           distanciaTexto = `${(distancia/1000).toFixed(1)} km`;
         }
 
-        const modoTexto = this.testMode ? '🔧 MODO PRUEBA' : '🌍 MODO REAL';
+        this.distanceText.textContent = distanciaTexto;
         
-        this.actualizarInfo(`
-          <strong>${destino.Nombre}</strong><br>
-          📏 Distancia: ${distanciaTexto}<br>
-          🧭 Dirección: ${Math.round(rumbo)}°<br>
-          <small>${modoTexto} | Precisión: ±${Math.round(accuracy)}m</small>
+        this.actualizarEstado(`
+          <b>${this.destino.Nombre}</b><br>
+          📏 ${distanciaTexto} · 🧭 ${Math.round(rumbo)}°<br>
+          <small>Precisión: ±${Math.round(accuracy)}m</small>
         `);
+      }
+
+      actualizarFlecha() {
+        if (!this.arrowContainer || this.targetBearing === undefined || this.currentHeading === undefined) {
+          return;
+        }
+
+        // Calcular la dirección relativa
+        let relativeBearing = this.targetBearing - this.currentHeading;
         
-        // Debug info
-        if (this.debugDiv) {
-          this.debugDiv.innerHTML = `
-            Usuario: ${this.userPosition.coords.latitude.toFixed(6)}, ${this.userPosition.coords.longitude.toFixed(6)}<br>
-            Destino: ${destino.Latitud.toFixed(6)}, ${destino.Longitud.toFixed(6)}<br>
-            Distancia: ${Math.round(distancia)}m | Rumbo: ${Math.round(rumbo)}°
-          `;
+        // Ajustar para que esté en el rango [-180, 180]
+        if (relativeBearing > 180) relativeBearing -= 360;
+        if (relativeBearing < -180) relativeBearing += 360;
+        
+        // Rotar la flecha
+        this.arrowContainer.style.transform = `translate(-50%, -50%) rotate(${relativeBearing}deg)`;
+        
+        // Cambiar color basado en qué tan cerca está de la dirección correcta
+        this.actualizarColorFlecha(Math.abs(relativeBearing));
+      }
+
+      actualizarColorFlecha(angleDiff) {
+        const arrow = document.getElementById('direction-arrow');
+        if (!arrow) return;
+        
+        // Cambiar de rojo a verde según qué tan bien esté alineado
+        if (angleDiff < 10) {
+          arrow.querySelector('path').style.fill = '#4CAF50'; // Verde
+        } else if (angleDiff < 30) {
+          arrow.querySelector('path').style.fill = '#FF9800'; // Naranja
+        } else {
+          arrow.querySelector('path').style.fill = '#F44336'; // Rojo
         }
       }
 
-      actualizarFlechaDireccion(rumbo, distancia) {
-        if (!this.directionArrow) return;
+      actualizarDebugInfo() {
+        if (!this.debugDiv) return;
         
-        // Calcular rotación basada en el rumbo y la orientación del dispositivo
-        this.currentRotation = this.calcularRotacionRelativa(rumbo);
-        
-        this.directionArrow.setAttribute('rotation', {
-          x: -90,  // Apuntar hacia adelante
-          y: this.currentRotation,
-          z: 0
-        });
-        
-        // Escala basada en distancia (más grande cuando está cerca)
-        const escalaBase = 1;
-        const escalaDistancia = Math.min(2, Math.max(0.5, 50 / Math.max(distancia, 10)));
-        const escalaFinal = escalaBase * escalaDistancia;
-        
-        this.directionArrow.setAttribute('scale', {
-          x: escalaFinal,
-          y: escalaFinal,
-          z: escalaFinal
-        });
-        
-        this.directionArrow.setAttribute('visible', 'true');
+        this.debugDiv.innerHTML = `
+          📍 Usuario: ${this.userPosition ? this.userPosition.coords.latitude.toFixed(6) : '--'}, ${this.userPosition ? this.userPosition.coords.longitude.toFixed(6) : '--'}<br>
+          🎯 Destino: ${this.destino.Latitud.toFixed(6)}, ${this.destino.Longitud.toFixed(6)}<br>
+          🧭 Heading: ${Math.round(this.currentHeading)}° · Rumbo: ${Math.round(this.targetBearing)}°<br>
+          📏 Distancia: ${Math.round(this.currentDistance)}m
+        `;
       }
 
-      calcularRotacionRelativa(rumbo) {
-        // En una implementación real, aquí integrarías con la brújula del dispositivo
-        // Por ahora, usamos el rumbo GPS directamente
-        return (rumbo + 180) % 360;
-      }
-
-      llegadaDestino(destino) {
-        this.actualizarInfo(`
+      llegadaDestino() {
+        this.actualizarEstado(`
           <div style="color: #4CAF50; font-weight: bold;">
             🎉 ¡HAS LLEGADO!<br>
-            ${destino.Nombre}
+            ${this.destino.Nombre}
           </div>
         `);
         
-        if (this.directionArrow) {
-          this.directionArrow.setAttribute('visible', 'false');
+        if (this.arrowContainer) {
+          this.arrowContainer.style.display = 'none';
         }
         
         if (this.watchId) {
@@ -317,14 +524,18 @@
         
         // Vibración
         if (navigator.vibrate) {
-          navigator.vibrate([200, 100, 200, 100, 200]);
+          navigator.vibrate([300, 100, 300, 100, 300]);
         }
         
-        // Efecto visual (cambiar color de fondo)
-        const sky = document.querySelector('a-sky');
-        if (sky) {
-          sky.setAttribute('color', '#004400');
-          setTimeout(() => sky.setAttribute('color', '#000000'), 2000);
+        // Efecto visual
+        this.distanceText.textContent = "¡Llegaste!";
+        this.distanceText.style.color = '#4CAF50';
+        this.distanceText.style.fontWeight = 'bold';
+      }
+
+      actualizarEstado(mensaje) {
+        if (this.statusText) {
+          this.statusText.innerHTML = mensaje;
         }
       }
 
@@ -346,43 +557,32 @@
         this.mostrarError(mensaje);
       }
 
-      actualizarInfo(mensaje) {
-        if (this.infoDiv) {
-          this.infoDiv.innerHTML = mensaje;
-        }
-      }
-
       mostrarError(mensaje) {
         console.error('❌ Error:', mensaje);
-        this.actualizarInfo(`<div style="color: #ff4444;">${mensaje}</div>`);
+        this.actualizarEstado(`<div style="color: #ff4444;">${mensaje}</div>`);
       }
 
       cleanup() {
         if (this.watchId) {
           navigator.geolocation.clearWatch(this.watchId);
-          console.log('🧹 GPS limpiado');
+        }
+        const video = document.getElementById('camera-video');
+        if (video.srcObject) {
+          video.srcObject.getTracks().forEach(track => track.stop());
         }
       }
     }
 
     // Inicializar cuando el DOM esté listo
     document.addEventListener('DOMContentLoaded', () => {
-      console.log('🚀 Iniciando aplicación AR...');
-      window.arNavigation = new SimpleARNavigation();
+      console.log('🧭 Iniciando Compás AR...');
+      window.arCompass = new ARCompass();
     });
 
-    // Cleanup
+    // Cleanup al salir
     window.addEventListener('beforeunload', () => {
-      if (window.arNavigation) {
-        window.arNavigation.cleanup();
-      }
-    });
-
-    // Manejar orientación del dispositivo para mejorar la flecha
-    window.addEventListener('deviceorientation', (event) => {
-      if (window.arNavigation && event.alpha !== null) {
-        // En una implementación completa, usaríamos la brújula aquí
-        // para ajustar la flecha según la orientación real del dispositivo
+      if (window.arCompass) {
+        window.arCompass.cleanup();
       }
     });
   </script>
