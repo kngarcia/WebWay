@@ -1,4 +1,4 @@
-// AR Navigation - Versión simplificada y robusta
+// AR Navigation - Versión mejorada con manejo de cámara
 console.log('AR Navigation cargado');
 
 class ARNavigation {
@@ -9,8 +9,30 @@ class ARNavigation {
         this.destino = null;
         this.GUIDE_AHEAD_METERS = 10;
         this.userPosition = null;
+        this.scene = null;
         
-        this.init();
+        // Esperar a que la cámara esté lista
+        this.waitForCamera().then(() => {
+            this.init();
+        }).catch(error => {
+            console.error('Error esperando por cámara:', error);
+        });
+    }
+
+    async waitForCamera() {
+        return new Promise((resolve) => {
+            const checkCamera = () => {
+                const scene = document.querySelector('a-scene');
+                if (scene && scene.is('arjs-video-loaded')) {
+                    console.log('✅ Cámara AR detectada y cargada');
+                    resolve();
+                } else {
+                    console.log('⏳ Esperando por cámara AR...');
+                    setTimeout(checkCamera, 500);
+                }
+            };
+            checkCamera();
+        });
     }
 
     async init() {
@@ -23,12 +45,16 @@ class ARNavigation {
             // Configurar elementos DOM
             this.arrow = document.getElementById('arrow');
             this.infoDiv = document.getElementById('info');
+            this.scene = document.querySelector('a-scene');
             
             if (!this.arrow) {
                 throw new Error('No se encontró la flecha AR');
             }
             
             console.log('✅ Elementos configurados');
+            
+            // Verificar estado de la cámara
+            this.verificarEstadoCamara();
             
             // Iniciar geolocalización
             this.iniciarGPS();
@@ -37,6 +63,28 @@ class ARNavigation {
             console.error('❌ Error en AR Navigation:', error);
             this.mostrarError('Error: ' + error.message);
         }
+    }
+
+    verificarEstadoCamara() {
+        // Verificar si el video de AR.js está funcionando
+        setTimeout(() => {
+            const videos = document.querySelectorAll('video');
+            console.log('📹 Videos encontrados:', videos.length);
+            
+            videos.forEach((video, index) => {
+                console.log(`Video ${index}:`, {
+                    readyState: video.readyState,
+                    paused: video.paused,
+                    error: video.error,
+                    src: video.src
+                });
+            });
+            
+            if (videos.length === 0 || videos[0].readyState < 2) {
+                console.warn('⚠️ La cámara no está funcionando correctamente');
+                this.mostrarError('Problema con la cámara. Intenta recargar la página.');
+            }
+        }, 3000);
     }
 
     cargarDestino() {
@@ -103,7 +151,7 @@ class ARNavigation {
     }
 
     calcularDistancia(lat1, lon1, lat2, lon2) {
-        const R = 6371e3; // Radio de la Tierra en metros
+        const R = 6371e3;
         const φ1 = lat1 * Math.PI / 180;
         const φ2 = lat2 * Math.PI / 180;
         const Δφ = (lat2 - lat1) * Math.PI / 180;
@@ -142,7 +190,7 @@ class ARNavigation {
             <strong>${this.destino.Nombre}</strong><br>
             📏 Distancia: ${distanciaTexto}<br>
             🧭 Dirección: ${Math.round(rumbo)}°<br>
-            <small>Mueve el dispositivo para ver la flecha</small>
+            <small>Mueve el dispositivo para ver la flecha AR</small>
         `;
         
         this.actualizarInfo(infoHTML);
@@ -162,17 +210,16 @@ class ARNavigation {
             });
             
             // Rotar flecha hacia el destino
-            // Ajustar rotación para que apunte correctamente
             const rotacionFlecha = (rumbo + 180) % 360;
             this.arrow.setAttribute('rotation', {
-                x: -90,  // Apuntar hacia adelante (cono apunta en Y)
+                x: -90,
                 y: rotacionFlecha,
                 z: 0
             });
             
             // Escalar flecha basado en distancia
-            const escalaBase = 2;
-            const escalaDistancia = Math.min(3, Math.max(1, distancia / 50));
+            const escalaBase = 3;
+            const escalaDistancia = Math.min(4, Math.max(1, distancia / 50));
             const escalaFinal = escalaBase * escalaDistancia;
             
             this.arrow.setAttribute('scale', {
@@ -275,17 +322,17 @@ class ARNavigation {
 document.addEventListener('DOMContentLoaded', () => {
     console.log('🚀 Inicializando AR Navigation...');
     
-    // Pequeño delay para asegurar que A-Frame esté listo
+    // Esperar a que la cámara esté lista antes de inicializar
     setTimeout(() => {
         if (typeof AFRAME !== 'undefined') {
             window.arNavigation = new ARNavigation();
             console.log('✅ AR Navigation inicializado');
         } else {
             console.error('❌ A-Frame no está disponible');
-            document.getElementById('loading').innerHTML = 
+            document.getElementById('initial-loading').innerHTML = 
                 '<p>❌ Error: No se pudo cargar la librería AR. Recarga la página.</p>';
         }
-    }, 1000);
+    }, 2000);
 });
 
 // Cleanup al salir
