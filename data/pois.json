@@ -1,14 +1,8 @@
 [
-  {
-    "id": 100,
-    "Nombre": "Punto Prueba Cercano", 
-    "Latitud": 4.5941736,
-    "Longitud": -74.154084
-  },
-  {
-    "id": 101, 
-    "Nombre": "Otro Punto Cercano",
-    "Latitud": 4.5943736,
-    "Longitud": -74.154284
-  }
+  { "id": 0, "name": "Bloque A", "lat": 4.6609819622582, "lon": -74.0596161549797 },
+  { "id": 1, "name": "Bloque B", "lat": 4.6612256555812, "lon": -74.0595379523924 },
+  { "id": 4, "name": "Bloque F", "lat": 4.6611701025415, "lon": -74.0597040270357 },
+  { "id": 6, "name": "PRIME",    "lat": 4.6615260954136, "lon": -74.0595618398411 },
+  { "id": 8, "name": "Colores",  "lat": 4.6612381266711, "lon": -74.0593889402125 },
+  { "id": 9, "name": "Cafetería principal", "lat": 4.6611156832330, "lon": -74.0595288524120 }
 ]
