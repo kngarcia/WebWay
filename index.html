@@ -2,23 +2,34 @@
 <html lang="es">
 <head>
   <meta charset="UTF-8">
+  <meta name="viewport" content="width=device-width, initial-scale=1.0">
   <title>WebWay - Demo Campus</title>
   <link rel="stylesheet" href="styles/styles.css">
 </head>
 <body>
   <header>
-    <h1>Demo Orientación Campus con WebAR</h1>
+    <h1>WebWay - Navegación Campus</h1>
+    <p>Selecciona tu destino y elige el modo</p>
   </header>
 
   <main>
-    <section>
-      <label for="destino">Selecciona un destino:</label>
-      <select id="destino"></select>
-      <button id="btnMap">Ver en mapa</button>
-      <button id="btnAR">Modo AR</button>
+    <section class="selection-panel">
+      <label for="destino">Destino:</label>
+      <select id="destino">
+        <option value="">-- Selecciona un lugar --</option>
+      </select>
+      
+      <div class="button-group">
+        <button id="btnMap" class="btn btn-secondary">Ver Mapa</button>
+        <button id="btnAR" class="btn btn-primary">Modo AR</button>
+      </div>
     </section>
   </main>
 
-  <script src="scripts/app.js"></script>
+  <footer>
+    <p>Demo de orientación con Realidad Aumentada</p>
+  </footer>
+
+  <script src="scripts/app.js" type="module"></script>
 </body>
 </html>

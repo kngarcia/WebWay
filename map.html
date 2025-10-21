@@ -2,29 +2,27 @@
 <html lang="es">
 <head>
   <meta charset="UTF-8">
-  <title>Vista Mapa - WebWay</title>
+  <meta name="viewport" content="width=device-width, initial-scale=1.0">
+  <title>Mapa - WebWay</title>
   <link rel="stylesheet" href="styles/styles.css">
 </head>
 <body>
   <header>
-    <h1>Vista Mapa (Demo sin AR)</h1>
+    <h1>Vista de Mapa</h1>
+    <a href="index.html" class="back-btn">← Volver</a>
   </header>
+
   <main>
-    <div id="map" class="map-container"></div>
+    <div class="map-container">
+      <div id="map" class="map-placeholder">
+        <p>Vista de mapa para: <span id="destination-name"></span></p>
+        <div class="coordinates">
+          <p id="coordinates-info"></p>
+        </div>
+      </div>
+    </div>
   </main>
 
-  <script src="scripts/app.js"></script>
-  <script>
-    document.addEventListener("DOMContentLoaded", async () => {
-      const params = new URLSearchParams(window.location.search);
-      const destino = params.get("destino");
-      const pois = await fetch("data/pois.json").then(r => r.json());
-      const lugar = pois.find(p => p.id == destino);
-
-      if (!lugar) return alert("Destino no encontrado");
-      const mapDiv = document.getElementById("map");
-      mapDiv.innerHTML = `<h3>${lugar.Nombre}</h3><p>Lat: ${lugar.Latitud}<br>Lon: ${lugar.Longitud}</p>`;
-    });
-  </script>
+  <script src="scripts/map.js" type="module"></script>
 </body>
 </html>
