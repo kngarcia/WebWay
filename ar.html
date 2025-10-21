@@ -2,47 +2,124 @@
 <html lang="es">
 <head>
   <meta charset="UTF-8">
-  <meta name="viewport" content="width=device-width, initial-scale=1.0">
+  <meta name="viewport" content="width=device-width, initial-scale=1.0, user-scalable=no">
   <title>AR - WebWay</title>
   
-  <!-- Librerías AR -->
-  <script src="https://cdn.jsdelivr.net/npm/three@0.150.1/build/three.min.js"></script>
-  <script src="https://cdn.jsdelivr.net/npm/aframe@1.4.0/dist/aframe.min.js"></script>
-  <script src="https://cdn.jsdelivr.net/gh/AR-js-org/AR.js@3.3.2/aframe/build/aframe-ar.min.js"></script>
+  <!-- CDNs corregidas con tipos MIME apropiados -->
+  <script src="https://cdnjs.cloudflare.com/ajax/libs/three.js/r128/three.min.js"></script>
+  <script src="https://cdnjs.cloudflare.com/ajax/libs/aframe/1.2.0/aframe.min.js"></script>
+  <script src="https://cdn.jsdelivr.net/gh/AR-js-org/AR.js@3.3.2/aframe/build/aframe-ar.js"></script>
   <script src="https://cdn.jsdelivr.net/npm/aframe-gps-entity-place@1.9.4/dist/aframe-gps-entity-place.min.js"></script>
   
   <link rel="stylesheet" href="styles/styles.css">
+  <style>
+    .loading {
+      position: fixed;
+      top: 0;
+      left: 0;
+      width: 100%;
+      height: 100%;
+      background: #000;
+      color: white;
+      display: flex;
+      flex-direction: column;
+      justify-content: center;
+      align-items: center;
+      z-index: 1000;
+    }
+    .spinner {
+      width: 40px;
+      height: 40px;
+      border: 4px solid #333;
+      border-top: 4px solid #fff;
+      border-radius: 50%;
+      animation: spin 1s linear infinite;
+      margin-bottom: 20px;
+    }
+    @keyframes spin {
+      0% { transform: rotate(0deg); }
+      100% { transform: rotate(360deg); }
+    }
+  </style>
 </head>
 <body>
+  <!-- Loading screen -->
+  <div id="loading" class="loading">
+    <div class="spinner"></div>
+    <p>Inicializando AR...</p>
+  </div>
+
+  <!-- Escena AR -->
   <a-scene
     vr-mode-ui="enabled: false"
     embedded
-    arjs="sourceType: webcam; debugUIEnabled: false; gpsMinDistance: 2;"
+    arjs="sourceType: webcam; debugUIEnabled: false; detectionMode: mono; matrixCodeType: 3x3;"
     renderer="logarithmicDepthBuffer: true;"
+    style="position: fixed; top: 0; left: 0; width: 100vw; height: 100vh;"
   >
     <a-assets>
-      <!-- Flecha simple como geometría nativa -->
-      <a-mixin id="arrow" geometry="primitive: cone; height: 4; radiusBottom: 1" 
-               material="color: #FF4444; shader: flat"></a-mixin>
+      <!-- Flecha como cono nativo - no requiere GLTF -->
+      <a-mixin id="arrow-mixin" 
+               geometry="primitive: cone; height: 3; radiusBottom: 0.8"
+               material="color: #FF3366; shader: flat">
+      </a-mixin>
     </a-assets>
     
-    <a-camera gps-camera rotation-reader="enabled: true"></a-camera>
-    <a-entity id="arrow" mixin="arrow" gps-entity-place="latitude: 0; longitude: 0;" 
-              scale="2 2 2" visible="false"></a-entity>
+    <a-camera gps-camera rotation-reader></a-camera>
+    
+    <!-- Flecha que seguiremos -->
+    <a-entity id="arrow" 
+              mixin="arrow-mixin"
+              gps-entity-place="latitude: 0; longitude: 0"
+              scale="2 2 2"
+              visible="false">
+    </a-entity>
   </a-scene>
 
-  <!-- Panel de información -->
+  <!-- Panel de control -->
   <div class="ar-controls">
-    <div id="info" class="info-panel">Buscando ubicación...</div>
-    <button id="back-btn" class="btn btn-secondary">Volver</button>
+    <div id="info" class="info-panel">
+      <h3>Navegación AR</h3>
+      <p>Preparando...</p>
+    </div>
+    <button id="back-btn" class="btn btn-secondary" onclick="window.location.href='index.html'">
+      ← Volver
+    </button>
   </div>
 
-  <!-- Loading state -->
-  <div id="loading" class="loading">
-    <div class="spinner"></div>
-    <p>Inicializando cámara AR...</p>
-  </div>
-
-  <script src="scripts/ar-navigation.js" type="module"></script>
+  <script>
+    // Verificar que todas las librerías se cargaron
+    window.addEventListener('DOMContentLoaded', () => {
+      console.log('DOM cargado, verificando librerías...');
+      
+      if (typeof AFRAME === 'undefined') {
+        console.error('AFRAME no se cargó correctamente');
+        document.getElementById('loading').innerHTML = 
+          '<p>Error: No se pudo cargar A-Frame. Recarga la página.</p>';
+        return;
+      }
+      
+      if (typeof THREE === 'undefined') {
+        console.error('THREE no se cargó correctamente');
+        document.getElementById('loading').innerHTML = 
+          '<p>Error: No se pudo cargar Three.js. Recarga la página.</p>';
+        return;
+      }
+      
+      console.log('Todas las librerías cargadas correctamente');
+      
+      // Ocultar loading cuando la escena esté lista
+      const scene = document.querySelector('a-scene');
+      if (scene) {
+        scene.addEventListener('loaded', () => {
+          setTimeout(() => {
+            document.getElementById('loading').style.display = 'none';
+          }, 2000);
+        });
+      }
+    });
+  </script>
+  
+  <script src="scripts/ar-navigation.js"></script>
 </body>
 </html>

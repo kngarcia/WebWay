@@ -1,23 +1,39 @@
+// scripts/ar-navigation.js - Versión simplificada y robusta
+
 class ARNavigation {
     constructor() {
         this.watchId = null;
-        this.arrowEntity = null;
+        this.arrow = null;
         this.infoDiv = null;
         this.destino = null;
-        this.GUIDE_AHEAD_METERS = 10;
-        this.ultimaPosicion = null;
+        this.GUIDE_AHEAD_METERS = 15;
         
         this.init();
     }
 
     async init() {
         try {
+            console.log('Iniciando AR Navigation...');
+            
+            // Cargar destino
             await this.cargarDestino();
-            this.configurarEscenaAR();
-            this.iniciarGeolocalizacion();
-            this.configurarControles();
+            
+            // Configurar elementos
+            this.arrow = document.getElementById('arrow');
+            this.infoDiv = document.getElementById('info');
+            
+            if (!this.arrow) {
+                throw new Error('No se encontró la flecha AR');
+            }
+            
+            // Iniciar geolocalización
+            this.iniciarGPS();
+            
+            console.log('AR Navigation inicializado correctamente');
+            
         } catch (error) {
-            this.mostrarError('Error inicializando AR: ' + error.message);
+            this.mostrarError('Error: ' + error.message);
+            console.error('Error en AR Navigation:', error);
         }
     }
 
@@ -31,50 +47,24 @@ class ARNavigation {
 
             try {
                 this.destino = JSON.parse(destinoData);
+                this.actualizarInfo(`Destino: ${this.destino.Nombre}<br>Buscando ubicación...`);
                 resolve();
             } catch (error) {
-                reject(new Error('Error parseando datos del destino'));
+                reject(new Error('Error cargando datos del destino'));
             }
         });
     }
 
-    configurarEscenaAR() {
-        this.arrowEntity = document.getElementById('arrow');
-        this.infoDiv = document.getElementById('info');
-        
-        if (!this.arrowEntity || !this.infoDiv) {
-            throw new Error('Elementos AR no encontrados');
-        }
-
-        // Ocultar loading cuando la escena esté lista
-        const scene = document.querySelector('a-scene');
-        scene.addEventListener('loaded', () => {
-            setTimeout(() => {
-                const loading = document.getElementById('loading');
-                if (loading) loading.style.display = 'none';
-            }, 2000);
-        });
-    }
-
-    configurarControles() {
-        const backBtn = document.getElementById('back-btn');
-        if (backBtn) {
-            backBtn.addEventListener('click', () => {
-                window.location.href = 'index.html';
-            });
-        }
-    }
-
-    iniciarGeolocalizacion() {
+    iniciarGPS() {
         if (!navigator.geolocation) {
-            this.mostrarError('Geolocalización no soportada en este navegador');
+            this.mostrarError('Geolocalización no soportada');
             return;
         }
 
         const options = {
             enableHighAccuracy: true,
-            timeout: 10000,
-            maximumAge: 5000
+            timeout: 15000,
+            maximumAge: 10000
         };
 
         this.watchId = navigator.geolocation.watchPosition(
@@ -82,38 +72,37 @@ class ARNavigation {
             (error) => this.manejarErrorGPS(error),
             options
         );
-
-        this.infoDiv.innerHTML = `Buscando ubicación...<br>Destino: ${this.destino.Nombre}`;
     }
 
-    actualizarPosicion(posicion) {
-        this.ultimaPosicion = posicion;
-        const userLat = posicion.coords.latitude;
-        const userLon = posicion.coords.longitude;
+    actualizarPosicion(position) {
+        const userLat = position.coords.latitude;
+        const userLon = position.coords.longitude;
         
         const distancia = this.calcularDistancia(userLat, userLon, this.destino.Latitud, this.destino.Longitud);
         const rumbo = this.calcularRumbo(userLat, userLon, this.destino.Latitud, this.destino.Longitud);
         
         this.actualizarInterfaz(distancia, rumbo);
         
-        if (distancia < 5) { // 5 metros de llegada
+        // Llegada al destino
+        if (distancia < 8) {
             this.llegadaDestino();
             return;
         }
         
+        // Actualizar flecha AR
         this.actualizarFlecha(userLat, userLon, rumbo, distancia);
     }
 
     calcularDistancia(lat1, lon1, lat2, lon2) {
-        const R = 6371e3; // Radio de la Tierra en metros
+        const R = 6371e3;
         const φ1 = lat1 * Math.PI / 180;
         const φ2 = lat2 * Math.PI / 180;
         const Δφ = (lat2 - lat1) * Math.PI / 180;
         const Δλ = (lon2 - lon1) * Math.PI / 180;
 
         const a = Math.sin(Δφ/2) * Math.sin(Δφ/2) +
-                Math.cos(φ1) * Math.cos(φ2) *
-                Math.sin(Δλ/2) * Math.sin(Δλ/2);
+                 Math.cos(φ1) * Math.cos(φ2) *
+                 Math.sin(Δλ/2) * Math.sin(Δλ/2);
         const c = 2 * Math.atan2(Math.sqrt(a), Math.sqrt(1-a));
 
         return R * c;
@@ -126,51 +115,66 @@ class ARNavigation {
 
         const y = Math.sin(Δλ) * Math.cos(φ2);
         const x = Math.cos(φ1) * Math.sin(φ2) -
-                Math.sin(φ1) * Math.cos(φ2) * Math.cos(Δλ);
+                 Math.sin(φ1) * Math.cos(φ2) * Math.cos(Δλ);
         const θ = Math.atan2(y, x);
 
         return (θ * 180 / Math.PI + 360) % 360;
     }
 
     actualizarInterfaz(distancia, rumbo) {
-        const distanciaTexto = distancia < 1000 ? 
-            `${Math.round(distancia)}m` : 
-            `${(distancia/1000).toFixed(1)}km`;
-            
-        this.infoDiv.innerHTML = `
+        let distanciaTexto;
+        if (distancia < 1000) {
+            distanciaTexto = `${Math.round(distancia)} metros`;
+        } else {
+            distanciaTexto = `${(distancia/1000).toFixed(1)} km`;
+        }
+
+        const infoHTML = `
             <strong>${this.destino.Nombre}</strong><br>
             Distancia: ${distanciaTexto}<br>
-            Rumbo: ${Math.round(rumbo)}°
+            Dirección: ${Math.round(rumbo)}°<br>
+            <small>Mueve el dispositivo para ver la flecha</small>
         `;
+        
+        this.actualizarInfo(infoHTML);
     }
 
     actualizarFlecha(userLat, userLon, rumbo, distancia) {
-        // Calcular punto guía adelante
-        const puntoGuia = this.calcularPuntoGuia(userLat, userLon, rumbo, this.GUIDE_AHEAD_METERS);
-        
-        // Actualizar posición de la flecha
-        this.arrowEntity.setAttribute('gps-entity-place', {
-            latitude: puntoGuia.lat,
-            longitude: puntoGuia.lon
-        });
-        
-        // Rotar flecha hacia el destino (ajustar según la orientación de la cámara)
-        const rotacionFlecha = (rumbo + 180) % 360;
-        this.arrowEntity.setAttribute('rotation', {
-            x: 0,
-            y: rotacionFlecha,
-            z: 0
-        });
-        
-        // Escalar flecha basado en distancia
-        const escala = Math.min(3, Math.max(1, distancia / 50));
-        this.arrowEntity.setAttribute('scale', {
-            x: escala,
-            y: escala,
-            z: escala
-        });
-        
-        this.arrowEntity.setAttribute('visible', 'true');
+        try {
+            // Calcular punto guía adelante
+            const puntoGuia = this.calcularPuntoGuia(userLat, userLon, rumbo, this.GUIDE_AHEAD_METERS);
+            
+            // Actualizar posición GPS de la flecha
+            this.arrow.setAttribute('gps-entity-place', {
+                latitude: puntoGuia.lat,
+                longitude: puntoGuia.lon
+            });
+            
+            // Rotar flecha (ajuste para orientación de cámara)
+            const rotacion = (rumbo + 180) % 360;
+            this.arrow.setAttribute('rotation', {
+                x: -90,  // Apuntar hacia adelante
+                y: rotacion,
+                z: 0
+            });
+            
+            // Escala basada en distancia
+            const escalaBase = 2;
+            const escalaDistancia = Math.min(3, Math.max(1, distancia / 50));
+            const escalaFinal = escalaBase * escalaDistancia;
+            
+            this.arrow.setAttribute('scale', {
+                x: escalaFinal,
+                y: escalaFinal, 
+                z: escalaFinal
+            });
+            
+            // Hacer visible
+            this.arrow.setAttribute('visible', 'true');
+            
+        } catch (error) {
+            console.warn('Error actualizando flecha:', error);
+        }
     }
 
     calcularPuntoGuia(lat, lon, rumbo, distancia) {
@@ -192,23 +196,23 @@ class ARNavigation {
     }
 
     llegadaDestino() {
-        this.infoDiv.innerHTML = `
-            <div class="success">
+        this.actualizarInfo(`
+            <div style="color: #4CAF50;">
                 <strong>¡Has llegado!</strong><br>
                 ${this.destino.Nombre}
             </div>
-        `;
+        `);
         
-        this.arrowEntity.setAttribute('visible', 'false');
+        this.arrow.setAttribute('visible', 'false');
         
         if (this.watchId) {
             navigator.geolocation.clearWatch(this.watchId);
             this.watchId = null;
         }
         
-        // Vibración si está disponible
+        // Vibración en dispositivos móviles
         if (navigator.vibrate) {
-            navigator.vibrate([200, 100, 200]);
+            navigator.vibrate([300, 100, 300]);
         }
     }
 
@@ -217,24 +221,30 @@ class ARNavigation {
         
         switch(error.code) {
             case error.PERMISSION_DENIED:
-                mensaje += 'Permiso denegado. Activa la ubicación.';
+                mensaje = 'Permiso de ubicación denegado. Activa la ubicación en tu dispositivo.';
                 break;
             case error.POSITION_UNAVAILABLE:
-                mensaje += 'Ubicación no disponible.';
+                mensaje = 'Ubicación no disponible. Verifica tu conexión GPS.';
                 break;
             case error.TIMEOUT:
-                mensaje += 'Tiempo de espera agotado.';
+                mensaje = 'Tiempo de espera agotado. Intenta nuevamente.';
                 break;
             default:
-                mensaje += error.message;
+                mensaje = 'Error desconocido: ' + error.message;
         }
         
         this.mostrarError(mensaje);
     }
 
+    actualizarInfo(mensaje) {
+        if (this.infoDiv) {
+            this.infoDiv.innerHTML = mensaje;
+        }
+    }
+
     mostrarError(mensaje) {
-        this.infoDiv.innerHTML = `<div class="error">${mensaje}</div>`;
-        console.error('AR Navigation Error:', mensaje);
+        console.error('AR Error:', mensaje);
+        this.actualizarInfo(`<div style="color: #ff4444;">${mensaje}</div>`);
     }
 
     // Cleanup
@@ -245,14 +255,23 @@ class ARNavigation {
     }
 }
 
-// Inicializar cuando el DOM esté listo
+// Inicialización cuando todo esté listo
 document.addEventListener('DOMContentLoaded', () => {
-    window.arNavigation = new ARNavigation();
+    // Pequeño delay para asegurar que AFRAME esté cargado
+    setTimeout(() => {
+        if (typeof AFRAME !== 'undefined') {
+            window.arNav = new ARNavigation();
+        } else {
+            console.error('AFRAME no está disponible');
+            document.getElementById('loading').innerHTML = 
+                '<p>Error: No se pudo cargar la librería AR. Recarga la página.</p>';
+        }
+    }, 1000);
 });
 
-// Cleanup al salir de la página
+// Cleanup al salir
 window.addEventListener('beforeunload', () => {
-    if (window.arNavigation) {
-        window.arNavigation.destruir();
+    if (window.arNav) {
+        window.arNav.destruir();
     }
 });
