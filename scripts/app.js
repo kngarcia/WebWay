@@ -48,6 +48,7 @@ class App {
 
         // Configurar botones
         document.getElementById('btnMap').addEventListener('click', () => this.irAMapa());
+        document.getElementById('btnAR').addEventListener('click', () => this.irAARMarcadores());
         document.getElementById('btnAR').addEventListener('click', () => this.irAAR());
     }
 
@@ -74,6 +75,15 @@ class App {
         if (!destino) return;
 
         window.location.href = `map.html?destino=${destino.id}`;
+    }
+
+    // En app.js - añade este nuevo método
+    irAARMarcadores() {
+        const destino = this.obtenerDestinoSeleccionado();
+        if (!destino) return;
+
+        localStorage.setItem('ar-destino', JSON.stringify(destino));
+        window.location.href = 'ar-marker.html';
     }
 
     // En app.js - función irAAR()
