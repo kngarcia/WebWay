@@ -1,4 +1,5 @@
-// scripts/ar-navigation.js - Versión simplificada y robusta
+// AR Navigation - Versión simplificada y robusta
+console.log('AR Navigation cargado');
 
 class ARNavigation {
     constructor() {
@@ -6,19 +7,20 @@ class ARNavigation {
         this.arrow = null;
         this.infoDiv = null;
         this.destino = null;
-        this.GUIDE_AHEAD_METERS = 15;
+        this.GUIDE_AHEAD_METERS = 10;
+        this.userPosition = null;
         
         this.init();
     }
 
     async init() {
         try {
-            console.log('Iniciando AR Navigation...');
+            console.log('🚀 Iniciando AR Navigation...');
             
             // Cargar destino
             await this.cargarDestino();
             
-            // Configurar elementos
+            // Configurar elementos DOM
             this.arrow = document.getElementById('arrow');
             this.infoDiv = document.getElementById('info');
             
@@ -26,45 +28,49 @@ class ARNavigation {
                 throw new Error('No se encontró la flecha AR');
             }
             
+            console.log('✅ Elementos configurados');
+            
             // Iniciar geolocalización
             this.iniciarGPS();
             
-            console.log('AR Navigation inicializado correctamente');
-            
         } catch (error) {
+            console.error('❌ Error en AR Navigation:', error);
             this.mostrarError('Error: ' + error.message);
-            console.error('Error en AR Navigation:', error);
         }
     }
 
     cargarDestino() {
         return new Promise((resolve, reject) => {
-            const destinoData = localStorage.getItem('ar-destino');
-            if (!destinoData) {
-                reject(new Error('No se encontró destino seleccionado'));
-                return;
-            }
-
             try {
+                const destinoData = localStorage.getItem('ar-destino');
+                if (!destinoData) {
+                    reject(new Error('No se encontró destino seleccionado'));
+                    return;
+                }
+                
                 this.destino = JSON.parse(destinoData);
-                this.actualizarInfo(`Destino: ${this.destino.Nombre}<br>Buscando ubicación...`);
+                console.log('📍 Destino cargado:', this.destino.Nombre);
+                this.actualizarInfo(`📍 <b>${this.destino.Nombre}</b><br>Buscando ubicación...`);
                 resolve();
+                
             } catch (error) {
-                reject(new Error('Error cargando datos del destino'));
+                reject(new Error('Error cargando datos del destino: ' + error.message));
             }
         });
     }
 
     iniciarGPS() {
         if (!navigator.geolocation) {
-            this.mostrarError('Geolocalización no soportada');
+            this.mostrarError('❌ Geolocalización no soportada en este navegador');
             return;
         }
 
+        console.log('🌍 Iniciando seguimiento GPS...');
+        
         const options = {
             enableHighAccuracy: true,
             timeout: 15000,
-            maximumAge: 10000
+            maximumAge: 5000
         };
 
         this.watchId = navigator.geolocation.watchPosition(
@@ -75,16 +81,19 @@ class ARNavigation {
     }
 
     actualizarPosicion(position) {
+        this.userPosition = position;
         const userLat = position.coords.latitude;
         const userLon = position.coords.longitude;
+        
+        console.log(`📡 Posición actual: ${userLat}, ${userLon}`);
         
         const distancia = this.calcularDistancia(userLat, userLon, this.destino.Latitud, this.destino.Longitud);
         const rumbo = this.calcularRumbo(userLat, userLon, this.destino.Latitud, this.destino.Longitud);
         
         this.actualizarInterfaz(distancia, rumbo);
         
-        // Llegada al destino
-        if (distancia < 8) {
+        // Verificar si llegó al destino
+        if (distancia < 10) {
             this.llegadaDestino();
             return;
         }
@@ -94,7 +103,7 @@ class ARNavigation {
     }
 
     calcularDistancia(lat1, lon1, lat2, lon2) {
-        const R = 6371e3;
+        const R = 6371e3; // Radio de la Tierra en metros
         const φ1 = lat1 * Math.PI / 180;
         const φ2 = lat2 * Math.PI / 180;
         const Δφ = (lat2 - lat1) * Math.PI / 180;
@@ -131,8 +140,8 @@ class ARNavigation {
 
         const infoHTML = `
             <strong>${this.destino.Nombre}</strong><br>
-            Distancia: ${distanciaTexto}<br>
-            Dirección: ${Math.round(rumbo)}°<br>
+            📏 Distancia: ${distanciaTexto}<br>
+            🧭 Dirección: ${Math.round(rumbo)}°<br>
             <small>Mueve el dispositivo para ver la flecha</small>
         `;
         
@@ -141,8 +150,10 @@ class ARNavigation {
 
     actualizarFlecha(userLat, userLon, rumbo, distancia) {
         try {
-            // Calcular punto guía adelante
+            // Calcular punto guía adelante en la dirección del destino
             const puntoGuia = this.calcularPuntoGuia(userLat, userLon, rumbo, this.GUIDE_AHEAD_METERS);
+            
+            console.log(`🎯 Punto guía: ${puntoGuia.lat}, ${puntoGuia.lon}`);
             
             // Actualizar posición GPS de la flecha
             this.arrow.setAttribute('gps-entity-place', {
@@ -150,22 +161,23 @@ class ARNavigation {
                 longitude: puntoGuia.lon
             });
             
-            // Rotar flecha (ajuste para orientación de cámara)
-            const rotacion = (rumbo + 180) % 360;
+            // Rotar flecha hacia el destino
+            // Ajustar rotación para que apunte correctamente
+            const rotacionFlecha = (rumbo + 180) % 360;
             this.arrow.setAttribute('rotation', {
-                x: -90,  // Apuntar hacia adelante
-                y: rotacion,
+                x: -90,  // Apuntar hacia adelante (cono apunta en Y)
+                y: rotacionFlecha,
                 z: 0
             });
             
-            // Escala basada en distancia
+            // Escalar flecha basado en distancia
             const escalaBase = 2;
             const escalaDistancia = Math.min(3, Math.max(1, distancia / 50));
             const escalaFinal = escalaBase * escalaDistancia;
             
             this.arrow.setAttribute('scale', {
                 x: escalaFinal,
-                y: escalaFinal, 
+                y: escalaFinal,
                 z: escalaFinal
             });
             
@@ -173,7 +185,7 @@ class ARNavigation {
             this.arrow.setAttribute('visible', 'true');
             
         } catch (error) {
-            console.warn('Error actualizando flecha:', error);
+            console.warn('⚠️ Error actualizando flecha:', error);
         }
     }
 
@@ -198,7 +210,7 @@ class ARNavigation {
     llegadaDestino() {
         this.actualizarInfo(`
             <div style="color: #4CAF50;">
-                <strong>¡Has llegado!</strong><br>
+                <strong>🎉 ¡Has llegado!</strong><br>
                 ${this.destino.Nombre}
             </div>
         `);
@@ -214,10 +226,12 @@ class ARNavigation {
         if (navigator.vibrate) {
             navigator.vibrate([300, 100, 300]);
         }
+        
+        console.log('✅ Llegada al destino registrada');
     }
 
     manejarErrorGPS(error) {
-        let mensaje = 'Error de GPS: ';
+        let mensaje = '❌ Error de GPS: ';
         
         switch(error.code) {
             case error.PERMISSION_DENIED:
@@ -234,6 +248,7 @@ class ARNavigation {
         }
         
         this.mostrarError(mensaje);
+        console.error('❌ Error GPS:', error);
     }
 
     actualizarInfo(mensaje) {
@@ -243,7 +258,7 @@ class ARNavigation {
     }
 
     mostrarError(mensaje) {
-        console.error('AR Error:', mensaje);
+        console.error('❌ AR Error:', mensaje);
         this.actualizarInfo(`<div style="color: #ff4444;">${mensaje}</div>`);
     }
 
@@ -251,27 +266,31 @@ class ARNavigation {
     destruir() {
         if (this.watchId) {
             navigator.geolocation.clearWatch(this.watchId);
+            console.log('🧹 Geolocalización limpiada');
         }
     }
 }
 
-// Inicialización cuando todo esté listo
+// Inicialización mejorada
 document.addEventListener('DOMContentLoaded', () => {
-    // Pequeño delay para asegurar que AFRAME esté cargado
+    console.log('🚀 Inicializando AR Navigation...');
+    
+    // Pequeño delay para asegurar que A-Frame esté listo
     setTimeout(() => {
         if (typeof AFRAME !== 'undefined') {
-            window.arNav = new ARNavigation();
+            window.arNavigation = new ARNavigation();
+            console.log('✅ AR Navigation inicializado');
         } else {
-            console.error('AFRAME no está disponible');
+            console.error('❌ A-Frame no está disponible');
             document.getElementById('loading').innerHTML = 
-                '<p>Error: No se pudo cargar la librería AR. Recarga la página.</p>';
+                '<p>❌ Error: No se pudo cargar la librería AR. Recarga la página.</p>';
         }
     }, 1000);
 });
 
 // Cleanup al salir
 window.addEventListener('beforeunload', () => {
-    if (window.arNav) {
-        window.arNav.destruir();
+    if (window.arNavigation) {
+        window.arNavigation.destruir();
     }
 });
