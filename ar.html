@@ -5,21 +5,68 @@
   <meta name="viewport" content="width=device-width, initial-scale=1.0, user-scalable=no">
   <title>AR - WebWay</title>
   
-  <!-- Librerías AR con versiones específicas -->
+  <!-- Solo A-Frame y Three.js - sin AR.js problemático -->
   <script src="https://cdnjs.cloudflare.com/ajax/libs/three.js/r128/three.min.js"></script>
   <script src="https://cdnjs.cloudflare.com/ajax/libs/aframe/1.2.0/aframe.min.js"></script>
-  <script src="https://raw.githack.com/AR-js-org/AR.js/master/aframe/build/aframe-ar-nft.js"></script>
   
-  <link rel="stylesheet" href="styles/styles.css">
+  <!-- Componente GPS simple para A-Frame -->
+  <script>
+    // Componente GPS simplificado
+    AFRAME.registerComponent('simple-gps', {
+      schema: {
+        latitude: {type: 'number', default: 0},
+        longitude: {type: 'number', default: 0}
+      },
+      init: function() {
+        this.updatePosition();
+      },
+      update: function() {
+        this.updatePosition();
+      },
+      updatePosition: function() {
+        const lat = this.data.latitude;
+        const lon = this.data.longitude;
+        // Conversión simple de coordenadas GPS a posición 3D
+        const x = (lon - this.el.sceneEl.systems.gps.currentLon) * 111320;
+        const z = -(lat - this.el.sceneEl.systems.gps.currentLat) * 111320;
+        this.el.setAttribute('position', {x: x, y: 0, z: z});
+      }
+    });
+
+    // Sistema GPS
+    AFRAME.registerSystem('gps', {
+      init: function() {
+        this.currentLat = 0;
+        this.currentLon = 0;
+        this.watchId = null;
+        this.startGPS();
+      },
+      startGPS: function() {
+        if (!navigator.geolocation) return;
+        
+        this.watchId = navigator.geolocation.watchPosition(
+          (position) => {
+            this.currentLat = position.coords.latitude;
+            this.currentLon = position.coords.longitude;
+            // Actualizar todas las entidades GPS
+            this.el.sceneEl.querySelectorAll('[simple-gps]').forEach(el => {
+              el.components['simple-gps'].updatePosition();
+            });
+          },
+          (error) => console.error('GPS Error:', error),
+          { enableHighAccuracy: true, timeout: 15000, maximumAge: 10000 }
+        );
+      }
+    });
+  </script>
+  
   <style>
-    /* Reset completo para AR */
     body {
       margin: 0;
       padding: 0;
       overflow: hidden;
       background: #000;
-      width: 100vw;
-      height: 100vh;
+      font-family: Arial, sans-serif;
     }
     
     .loading {
@@ -35,7 +82,6 @@
       justify-content: center;
       align-items: center;
       z-index: 1000;
-      font-family: Arial, sans-serif;
     }
     
     .spinner {
@@ -53,196 +99,384 @@
       100% { transform: rotate(360deg); }
     }
     
-    .camera-permission {
-      text-align: center;
-      padding: 20px;
-      max-width: 300px;
+    .ar-controls {
+      position: fixed;
+      bottom: 20px;
+      left: 50%;
+      transform: translateX(-50%);
+      z-index: 1000;
+      width: 90%;
+      max-width: 400px;
     }
     
-    .permission-btn {
-      background: #4CAF50;
+    .info-panel {
+      background: rgba(0, 0, 0, 0.8);
       color: white;
+      padding: 1rem;
+      border-radius: 15px;
+      margin-bottom: 1rem;
+      text-align: center;
+      backdrop-filter: blur(10px);
+      border: 1px solid rgba(255, 255, 255, 0.1);
+    }
+    
+    .btn {
+      padding: 12px 24px;
       border: none;
-      padding: 15px 30px;
-      border-radius: 5px;
+      border-radius: 8px;
       font-size: 16px;
       cursor: pointer;
-      margin: 10px;
+      width: 100%;
     }
     
-    /* Asegurar que la escena ocupe toda la pantalla */
-    a-scene {
-      width: 100vw !important;
-      height: 100vh !important;
-      position: fixed !important;
-      top: 0 !important;
-      left: 0 !important;
-      z-index: 1 !important;
+    .btn-secondary {
+      background: #666;
+      color: white;
+    }
+    
+    /* Estilos para la cámara manual */
+    #manual-video {
+      position: fixed;
+      top: 0;
+      left: 0;
+      width: 100vw;
+      height: 100vh;
+      object-fit: cover;
+      z-index: 1;
+      display: none;
+    }
+    
+    #ar-scene {
+      position: fixed;
+      top: 0;
+      left: 0;
+      width: 100vw;
+      height: 100vh;
+      z-index: 2;
     }
   </style>
 </head>
 <body>
-  <!-- Overlay de permisos -->
-  <div id="permission-overlay" class="loading" style="display: none;">
-    <div class="camera-permission">
-      <h2>Permiso de Cámara Requerido</h2>
-      <p>Esta app necesita acceso a tu cámara para la realidad aumentada.</p>
-      <button id="start-camera-btn" class="permission-btn">Activar Cámara</button>
-      <p id="camera-error" style="color: #ff6b6b; margin-top: 1rem; display: none;"></p>
-    </div>
-  </div>
+  <!-- Video para la cámara -->
+  <video id="manual-video" autoplay playsinline></video>
 
-  <!-- Loading inicial -->
-  <div id="initial-loading" class="loading">
-    <div class="spinner"></div>
-    <p>Preparando realidad aumentada...</p>
-  </div>
-
-  <!-- Escena AR -->
-  <a-scene
-    vr-mode-ui="enabled: false"
-    embedded
-    arjs="sourceType: webcam; debugUIEnabled: false; detectionMode: mono; matrixCodeType: 3x3;"
-    renderer="logarithmicDepthBuffer: true; antialias: true;"
-    gesture-detector
-    id="ar-scene"
-    style="display: none;"
-  >
-    <a-assets>
-      <a-asset-item id="arrowAsset" src=""></a-asset-item>
-    </a-assets>
+  <!-- Escena A-Frame sin AR.js -->
+  <a-scene id="ar-scene" style="display: none;" gps>
+    <!-- Cámara -->
+    <a-camera look-controls="enabled: true" wasd-controls="enabled: false">
+      <!-- Flecha de navegación como hijo de la cámara (siempre en vista) -->
+      <a-entity 
+        id="arrow"
+        geometry="primitive: cone; height: 2; radiusBottom: 0.5"
+        material="color: #FF3366; metalness: 0.3; roughness: 0.7"
+        position="0 0 -5"
+        scale="2 2 2"
+        visible="false"
+      ></a-entity>
+    </a-camera>
     
-    <a-camera 
-      gps-camera 
-      rotation-reader 
-      look-controls="enabled: true"
-      wasd-controls="enabled: false"
-    ></a-camera>
-    
-    <!-- Flecha de navegación -->
-    <a-entity 
-      id="arrow"
-      geometry="primitive: cone; height: 4; radiusBottom: 1"
-      material="color: #FF3366; metalness: 0.5; roughness: 0.5"
-      scale="3 3 3"
-      visible="false"
-      gps-entity-place="latitude: 0; longitude: 0"
-    ></a-entity>
+    <!-- Entidades de prueba -->
+    <a-entity id="test-marker" simple-gps="latitude: 0; longitude: 0" geometry="primitive: box" material="color: blue" scale="1 1 1" visible="false"></a-entity>
   </a-scene>
+
+  <!-- Loading -->
+  <div id="loading" class="loading">
+    <div class="spinner"></div>
+    <p>Inicializando navegación AR...</p>
+  </div>
 
   <!-- Panel de control -->
   <div class="ar-controls">
     <div id="info" class="info-panel">
       <h3>Navegación AR</h3>
-      <p>Inicializando...</p>
+      <p>Preparando...</p>
     </div>
     <button id="back-btn" class="btn btn-secondary" onclick="window.location.href='index.html'">
-      ← Volver
+      ← Volver al Menú
     </button>
   </div>
 
   <script>
-    // Manejo de permisos de cámara
-    class CameraManager {
+    // Sistema de cámara manual y AR simplificado
+    class SimpleARNavigation {
       constructor() {
-        this.hasPermission = false;
+        this.video = document.getElementById('manual-video');
+        this.scene = document.getElementById('ar-scene');
+        this.loading = document.getElementById('loading');
+        this.infoDiv = document.getElementById('info');
+        this.destino = null;
+        this.watchId = null;
+        
         this.init();
       }
 
       async init() {
         try {
-          // Verificar si la API de medios está disponible
-          if (!navigator.mediaDevices || !navigator.mediaDevices.getUserMedia) {
-            throw new Error('Tu navegador no soporta acceso a la cámara');
-          }
-
-          // Intentar obtener permisos automáticamente
-          await this.requestCameraPermission();
+          console.log('🚀 Iniciando navegación AR simplificada...');
+          
+          // Cargar destino
+          await this.cargarDestino();
+          
+          // Iniciar cámara
+          await this.iniciarCamara();
+          
+          // Iniciar GPS
+          this.iniciarGPS();
+          
+          // Mostrar escena
+          this.scene.style.display = 'block';
+          this.loading.style.display = 'none';
+          
+          console.log('✅ Navegación AR lista');
           
         } catch (error) {
-          console.error('Error inicializando cámara:', error);
-          this.showPermissionOverlay(error.message);
+          console.error('❌ Error:', error);
+          this.mostrarError('Error: ' + error.message);
         }
       }
 
-      async requestCameraPermission() {
+      cargarDestino() {
+        return new Promise((resolve, reject) => {
+          try {
+            const destinoData = localStorage.getItem('ar-destino');
+            if (!destinoData) {
+              reject(new Error('No se encontró destino seleccionado'));
+              return;
+            }
+            
+            this.destino = JSON.parse(destinoData);
+            console.log('📍 Destino:', this.destino.Nombre);
+            this.actualizarInfo(`📍 <b>${this.destino.Nombre}</b><br>Iniciando cámara...`);
+            resolve();
+            
+          } catch (error) {
+            reject(new Error('Error cargando destino: ' + error.message));
+          }
+        });
+      }
+
+      async iniciarCamara() {
         try {
-          console.log('Solicitando permisos de cámara...');
+          console.log('📷 Solicitando permisos de cámara...');
           
-          // Intentar acceder a la cámara
           const stream = await navigator.mediaDevices.getUserMedia({ 
             video: {
-              facingMode: 'environment', // Preferir cámara trasera
+              facingMode: 'environment',
               width: { ideal: 1280 },
               height: { ideal: 720 }
             },
             audio: false
           });
           
-          // Parar el stream inmediatamente (AR.js lo manejará)
-          stream.getTracks().forEach(track => track.stop());
+          this.video.srcObject = stream;
+          this.video.style.display = 'block';
           
-          this.hasPermission = true;
-          console.log('✅ Permisos de cámara concedidos');
-          this.hidePermissionOverlay();
-          this.startARScene();
+          // Esperar a que el video esté listo
+          await new Promise((resolve) => {
+            this.video.onloadedmetadata = () => {
+              this.video.play();
+              resolve();
+            };
+          });
+          
+          console.log('✅ Cámara iniciada correctamente');
           
         } catch (error) {
           console.error('❌ Error de cámara:', error);
-          this.showPermissionOverlay(this.getErrorMessage(error));
+          throw new Error(this.getCameraErrorMessage(error));
         }
       }
 
-      getErrorMessage(error) {
+      getCameraErrorMessage(error) {
         switch(error.name) {
           case 'NotAllowedError':
-            return 'Permiso de cámara denegado. Por favor, permite el acceso a la cámara en la configuración de tu navegador.';
+            return 'Permiso de cámara denegado. Por favor, permite el acceso a la cámara.';
           case 'NotFoundError':
-            return 'No se encontró ninguna cámara disponible.';
+            return 'No se encontró cámara trasera. Usando cámara frontal.';
           case 'NotSupportedError':
-            return 'Tu navegador no soporta realidad aumentada.';
-          case 'NotReadableError':
-            return 'La cámara está siendo usada por otra aplicación.';
+            return 'Tu navegador no soporta acceso a la cámara.';
           default:
-            return `Error de cámara: ${error.message}`;
+            return 'Error accediendo a la cámara: ' + error.message;
         }
       }
 
-      showPermissionOverlay(message) {
-        document.getElementById('initial-loading').style.display = 'none';
-        const overlay = document.getElementById('permission-overlay');
-        const errorElem = document.getElementById('camera-error');
+      iniciarGPS() {
+        if (!navigator.geolocation) {
+          this.mostrarError('Geolocalización no soportada');
+          return;
+        }
+
+        console.log('🌍 Iniciando GPS...');
         
-        errorElem.textContent = message;
-        errorElem.style.display = 'block';
-        overlay.style.display = 'flex';
+        this.watchId = navigator.geolocation.watchPosition(
+          (position) => this.actualizarPosicion(position),
+          (error) => this.manejarErrorGPS(error),
+          {
+            enableHighAccuracy: true,
+            timeout: 15000,
+            maximumAge: 10000
+          }
+        );
       }
 
-      hidePermissionOverlay() {
-        document.getElementById('permission-overlay').style.display = 'none';
+      actualizarPosicion(position) {
+        const userLat = position.coords.latitude;
+        const userLon = position.coords.longitude;
+        
+        console.log(`📡 Posición: ${userLat.toFixed(6)}, ${userLon.toFixed(6)}`);
+        
+        const distancia = this.calcularDistancia(userLat, userLon, this.destino.Latitud, this.destino.Longitud);
+        const rumbo = this.calcularRumbo(userLat, userLon, this.destino.Latitud, this.destino.Longitud);
+        
+        this.actualizarInterfaz(distancia, rumbo);
+        this.actualizarFlecha(rumbo, distancia);
+        
+        if (distancia < 10) {
+          this.llegadaDestino();
+        }
       }
 
-      startARScene() {
-        const scene = document.getElementById('ar-scene');
-        if (scene) {
-          scene.style.display = 'block';
-          document.getElementById('initial-loading').style.display = 'none';
-          console.log('🚀 Escena AR iniciada');
+      calcularDistancia(lat1, lon1, lat2, lon2) {
+        const R = 6371e3;
+        const φ1 = lat1 * Math.PI / 180;
+        const φ2 = lat2 * Math.PI / 180;
+        const Δφ = (lat2 - lat1) * Math.PI / 180;
+        const Δλ = (lon2 - lon1) * Math.PI / 180;
+
+        const a = Math.sin(Δφ/2) * Math.sin(Δφ/2) +
+                 Math.cos(φ1) * Math.cos(φ2) *
+                 Math.sin(Δλ/2) * Math.sin(Δλ/2);
+        const c = 2 * Math.atan2(Math.sqrt(a), Math.sqrt(1-a));
+
+        return R * c;
+      }
+
+      calcularRumbo(lat1, lon1, lat2, lon2) {
+        const φ1 = lat1 * Math.PI / 180;
+        const φ2 = lat2 * Math.PI / 180;
+        const Δλ = (lon2 - lon1) * Math.PI / 180;
+
+        const y = Math.sin(Δλ) * Math.cos(φ2);
+        const x = Math.cos(φ1) * Math.sin(φ2) -
+                 Math.sin(φ1) * Math.cos(φ2) * Math.cos(Δλ);
+        const θ = Math.atan2(y, x);
+
+        return (θ * 180 / Math.PI + 360) % 360;
+      }
+
+      actualizarInterfaz(distancia, rumbo) {
+        let distanciaTexto;
+        if (distancia < 1000) {
+          distanciaTexto = `${Math.round(distancia)} metros`;
+        } else {
+          distanciaTexto = `${(distancia/1000).toFixed(1)} km`;
+        }
+
+        this.actualizarInfo(`
+          <strong>${this.destino.Nombre}</strong><br>
+          📏 Distancia: ${distanciaTexto}<br>
+          🧭 Dirección: ${Math.round(rumbo)}°<br>
+          <small>Apunta la cámara hacia la dirección indicada</small>
+        `);
+      }
+
+      actualizarFlecha(rumbo, distancia) {
+        const arrow = document.getElementById('arrow');
+        if (!arrow) return;
+
+        // Convertir rumbo a rotación (ajustar según la orientación del dispositivo)
+        const rotacion = this.calcularRotacionFlecha(rumbo);
+        
+        arrow.setAttribute('rotation', {
+          x: -90,  // Apuntar hacia adelante
+          y: rotacion,
+          z: 0
+        });
+        
+        // Escala basada en distancia
+        const escala = Math.min(3, Math.max(1, distancia / 50));
+        arrow.setAttribute('scale', `${escala} ${escala} ${escala}`);
+        
+        arrow.setAttribute('visible', 'true');
+      }
+
+      calcularRotacionFlecha(rumbo) {
+        // Ajustar la rotación basada en la orientación del dispositivo
+        // Esto es una simplificación - en una app real necesitarías el compass
+        return (rumbo + 180) % 360;
+      }
+
+      llegadaDestino() {
+        this.actualizarInfo(`
+          <div style="color: #4CAF50;">
+            <strong>🎉 ¡Has llegado!</strong><br>
+            ${this.destino.Nombre}
+          </div>
+        `);
+        
+        const arrow = document.getElementById('arrow');
+        if (arrow) arrow.setAttribute('visible', 'false');
+        
+        if (this.watchId) {
+          navigator.geolocation.clearWatch(this.watchId);
+          this.watchId = null;
+        }
+        
+        if (navigator.vibrate) {
+          navigator.vibrate([300, 100, 300]);
+        }
+      }
+
+      manejarErrorGPS(error) {
+        let mensaje = 'Error GPS: ';
+        switch(error.code) {
+          case error.PERMISSION_DENIED:
+            mensaje = 'Permiso de ubicación denegado. Activa la ubicación.';
+            break;
+          case error.POSITION_UNAVAILABLE:
+            mensaje = 'Ubicación no disponible. Verifica tu GPS.';
+            break;
+          case error.TIMEOUT:
+            mensaje = 'Tiempo de espera agotado.';
+            break;
+          default:
+            mensaje = error.message;
+        }
+        this.mostrarError(mensaje);
+      }
+
+      actualizarInfo(mensaje) {
+        if (this.infoDiv) {
+          this.infoDiv.innerHTML = mensaje;
+        }
+      }
+
+      mostrarError(mensaje) {
+        console.error('❌ Error:', mensaje);
+        this.actualizarInfo(`<div style="color: #ff4444;">${mensaje}</div>`);
+      }
+
+      cleanup() {
+        if (this.watchId) {
+          navigator.geolocation.clearWatch(this.watchId);
+        }
+        if (this.video.srcObject) {
+          this.video.srcObject.getTracks().forEach(track => track.stop());
         }
       }
     }
 
     // Inicializar cuando el DOM esté listo
     document.addEventListener('DOMContentLoaded', () => {
-      window.cameraManager = new CameraManager();
-      
-      // Configurar botón de permisos
-      document.getElementById('start-camera-btn').addEventListener('click', () => {
-        window.cameraManager.requestCameraPermission();
-      });
+      window.simpleAR = new SimpleARNavigation();
+    });
+
+    // Cleanup
+    window.addEventListener('beforeunload', () => {
+      if (window.simpleAR) {
+        window.simpleAR.cleanup();
+      }
     });
   </script>
-  
-  <script src="scripts/ar-navigation.js"></script>
 </body>
 </html>
