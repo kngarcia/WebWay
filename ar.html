@@ -5,83 +5,42 @@
   <meta name="viewport" content="width=device-width, initial-scale=1.0, user-scalable=no">
   <title>AR Navigation - WebWay</title>
   
-  <!-- Librerías básicas -->
   <script src="https://cdnjs.cloudflare.com/ajax/libs/three.js/r128/three.min.js"></script>
   <script src="https://cdnjs.cloudflare.com/ajax/libs/aframe/1.2.0/aframe.min.js"></script>
   <script src="https://raw.githack.com/AR-js-org/AR.js/master/aframe/build/aframe-ar.js"></script>
   
   <style>
-    body {
-      margin: 0;
-      padding: 0;
-      overflow: hidden;
-      background: #000;
-    }
-    
+    body { margin: 0; padding: 0; overflow: hidden; background: #000; }
     .loading {
-      position: fixed;
-      top: 0;
-      left: 0;
-      width: 100%;
-      height: 100%;
-      background: #000;
-      color: white;
-      display: flex;
-      flex-direction: column;
-      justify-content: center;
-      align-items: center;
-      z-index: 1000;
-      font-family: Arial, sans-serif;
+      position: fixed; top: 0; left: 0; width: 100%; height: 100%;
+      background: #000; color: white; display: flex; flex-direction: column;
+      justify-content: center; align-items: center; z-index: 1000;
     }
-    
     .spinner {
-      width: 40px;
-      height: 40px;
-      border: 4px solid #333;
-      border-top: 4px solid #fff;
-      border-radius: 50%;
-      animation: spin 1s linear infinite;
-      margin-bottom: 20px;
+      width: 40px; height: 40px; border: 4px solid #333;
+      border-top: 4px solid #fff; border-radius: 50%;
+      animation: spin 1s linear infinite; margin-bottom: 20px;
     }
-    
     @keyframes spin {
-      0% { transform: rotate(0deg); }
-      100% { transform: rotate(360deg); }
+      0% { transform: rotate(0deg); } 100% { transform: rotate(360deg); }
     }
-    
     .info-panel {
-      position: fixed;
-      bottom: 20px;
-      left: 50%;
-      transform: translateX(-50%);
-      background: rgba(0, 0, 0, 0.8);
-      color: white;
-      padding: 15px;
-      border-radius: 10px;
-      z-index: 1000;
-      max-width: 90%;
-      text-align: center;
+      position: fixed; bottom: 20px; left: 50%; transform: translateX(-50%);
+      background: rgba(0, 0, 0, 0.9); color: white; padding: 15px;
+      border-radius: 10px; z-index: 1000; max-width: 90%; text-align: center;
     }
-    
-    .btn {
-      padding: 10px 20px;
-      background: #666;
-      color: white;
-      border: none;
-      border-radius: 5px;
-      margin-top: 10px;
-      cursor: pointer;
-    }
+    .btn { padding: 10px 20px; background: #666; color: white; 
+           border: none; border-radius: 5px; margin: 5px; cursor: pointer; }
+    .debug-info { font-size: 12px; color: #ccc; margin-top: 10px; }
   </style>
 </head>
 <body>
-  <!-- Loading -->
   <div id="loading" class="loading">
     <div class="spinner"></div>
     <p>Inicializando AR con GPS...</p>
   </div>
 
-  <!-- Escena AR.js con GPS -->
+  <!-- Escena AR.js -->
   <a-scene
     vr-mode-ui="enabled: false"
     arjs="sourceType: webcam; debugUIEnabled: false; detectionMode: mono; matrixCodeType: 3x3;"
@@ -89,55 +48,64 @@
     gps-camera
     style="width: 100vw; height: 100vh;"
   >
-    <!-- Cámara con GPS -->
     <a-camera gps-camera rotation-reader></a-camera>
     
-    <!-- Marcador del destino (aparecerá en coordenadas GPS) -->
+    <!-- Marcador del destino -->
     <a-entity 
       id="destination-marker"
-      geometry="primitive: box; width: 1; height: 1; depth: 1"
-      material="color: #FF3366"
+      geometry="primitive: box; width: 2; height: 2; depth: 2"
+      material="color: #FF3366; metalness: 0.3; roughness: 0.7"
       gps-entity-place="latitude: 0; longitude: 0"
-      scale="5 5 5"
+      scale="3 3 3"
       visible="false"
     >
-      <!-- Texto flotante -->
       <a-entity
-        text="value: Destino; color: white; align: center"
-        position="0 2 0"
-        scale="2 2 2"
+        text="value: DESTINO; color: white; align: center; width: 5"
+        position="0 3 0"
         visible="true"
       ></a-entity>
     </a-entity>
     
-    <!-- Flecha de dirección (aparecerá cerca del usuario) -->
+    <!-- Flechas de guía (más cercanas) -->
     <a-entity 
-      id="direction-arrow"
-      geometry="primitive: cone; height: 3; radiusBottom: 1"
+      id="direction-arrow-1"
+      geometry="primitive: cone; height: 4; radiusBottom: 1"
       material="color: #3366FF"
+      gps-entity-place="latitude: 0; longitude: 0"
+      scale="2 2 2"
+      visible="false"
+    ></a-entity>
+    
+    <a-entity 
+      id="direction-arrow-2"
+      geometry="primitive: cone; height: 4; radiusBottom: 1"
+      material="color: #33FF66"
       gps-entity-place="latitude: 0; longitude: 0"
       scale="2 2 2"
       visible="false"
     ></a-entity>
   </a-scene>
 
-  <!-- Panel de información -->
   <div id="info" class="info-panel">
     <h3>Navegación AR</h3>
     <p>Buscando ubicación...</p>
+    <div id="debug" class="debug-info"></div>
     <button class="btn" onclick="window.location.href='index.html'">Volver</button>
+    <button class="btn" id="test-mode-btn">Modo Prueba</button>
   </div>
 
   <script>
-    // Navegación AR con GPS
-    class SimpleARNavigation {
+    class ARNavigationWithTestMode {
       constructor() {
         this.destino = null;
         this.userPosition = null;
         this.watchId = null;
         this.destinationMarker = null;
-        this.directionArrow = null;
+        this.directionArrows = [];
         this.infoDiv = null;
+        this.debugDiv = null;
+        this.testMode = false;
+        this.testDestination = null;
         
         this.init();
       }
@@ -146,31 +114,11 @@
         try {
           console.log('🚀 Iniciando AR con GPS...');
           
-          // Cargar destino
           await this.cargarDestino();
-          
-          // Configurar elementos
-          this.destinationMarker = document.getElementById('destination-marker');
-          this.directionArrow = document.getElementById('direction-arrow');
-          this.infoDiv = document.getElementById('info');
-          
-          if (!this.destinationMarker) {
-            throw new Error('No se encontró el marcador de destino');
-          }
-          
-          // Configurar el marcador del destino en sus coordenadas reales
-          this.destinationMarker.setAttribute('gps-entity-place', {
-            latitude: this.destino.Latitud,
-            longitude: this.destino.Longitud
-          });
-          this.destinationMarker.setAttribute('visible', 'true');
-          
-          console.log('📍 Marcador de destino configurado en:', this.destino.Latitud, this.destino.Longitud);
-          
-          // Iniciar GPS para seguimiento del usuario
+          this.configurarElementos();
+          this.configurarBotones();
           this.iniciarGPS();
           
-          // Ocultar loading después de un tiempo
           setTimeout(() => {
             document.getElementById('loading').style.display = 'none';
           }, 3000);
@@ -191,8 +139,8 @@
             }
             
             this.destino = JSON.parse(destinoData);
-            console.log('🎯 Destino:', this.destino.Nombre);
-            this.actualizarInfo(`🎯 <b>${this.destino.Nombre}</b><br>Buscando ubicación GPS...`);
+            console.log('🎯 Destino original:', this.destino);
+            this.actualizarInfo(`🎯 <b>${this.destino.Nombre}</b><br>Buscando ubicación...`);
             resolve();
             
           } catch (error) {
@@ -201,14 +149,59 @@
         });
       }
 
+      configurarElementos() {
+        this.destinationMarker = document.getElementById('destination-marker');
+        this.directionArrows = [
+          document.getElementById('direction-arrow-1'),
+          document.getElementById('direction-arrow-2')
+        ];
+        this.infoDiv = document.getElementById('info');
+        this.debugDiv = document.getElementById('debug');
+      }
+
+      configurarBotones() {
+        document.getElementById('test-mode-btn').addEventListener('click', () => {
+          this.activarModoPrueba();
+        });
+      }
+
+      activarModoPrueba() {
+        if (!this.userPosition) {
+          alert('Espera a tener ubicación GPS primero');
+          return;
+        }
+        
+        this.testMode = true;
+        
+        // Crear destino de prueba a 100 metros de distancia
+        const userLat = this.userPosition.coords.latitude;
+        const userLon = this.userPosition.coords.longitude;
+        
+        // Destino a 100 metros al noreste
+        this.testDestination = {
+          Nombre: `${this.destino.Nombre} (PRUEBA - 100m)`,
+          Latitud: userLat + 0.0009,  // ~100 metros norte
+          Longitud: userLon + 0.0009  // ~100 metros este
+        };
+        
+        this.actualizarInfo(`🔧 <b>MODO PRUEBA ACTIVADO</b><br>Destino a 100 metros`);
+        
+        // Configurar marcador en posición de prueba
+        this.destinationMarker.setAttribute('gps-entity-place', {
+          latitude: this.testDestination.Latitud,
+          longitude: this.testDestination.Longitud
+        });
+        this.destinationMarker.setAttribute('visible', 'true');
+        
+        console.log('📍 Modo prueba - Destino:', this.testDestination);
+      }
+
       iniciarGPS() {
         if (!navigator.geolocation) {
           this.mostrarError('Geolocalización no soportada');
           return;
         }
 
-        console.log('🌍 Iniciando seguimiento GPS...');
-        
         this.watchId = navigator.geolocation.watchPosition(
           (position) => this.actualizarPosicionUsuario(position),
           (error) => this.manejarErrorGPS(error),
@@ -225,16 +218,26 @@
         const userLat = position.coords.latitude;
         const userLon = position.coords.longitude;
         
-        console.log('📍 Posición usuario:', userLat, userLon);
+        // Usar destino real o de prueba
+        const destinoActual = this.testMode ? this.testDestination : this.destino;
         
-        const distancia = this.calcularDistancia(userLat, userLon, this.destino.Latitud, this.destino.Longitud);
-        const rumbo = this.calcularRumbo(userLat, userLon, this.destino.Latitud, this.destino.Longitud);
+        const distancia = this.calcularDistancia(userLat, userLon, destinoActual.Latitud, destinoActual.Longitud);
+        const rumbo = this.calcularRumbo(userLat, userLon, destinoActual.Latitud, destinoActual.Longitud);
         
-        this.actualizarInterfaz(distancia, rumbo);
-        this.actualizarFlechaDireccion(userLat, userLon, rumbo, distancia);
+        this.actualizarInterfaz(distancia, rumbo, destinoActual);
+        this.actualizarFlechasDireccion(userLat, userLon, rumbo, distancia);
         
-        if (distancia < 20) { // 20 metros de llegada
-          this.llegadaDestino();
+        // Solo configurar marcador real si no estamos en modo prueba
+        if (!this.testMode && distancia < 1000) { // Solo si está dentro de 1km
+          this.destinationMarker.setAttribute('gps-entity-place', {
+            latitude: destinoActual.Latitud,
+            longitude: destinoActual.Longitud
+          });
+          this.destinationMarker.setAttribute('visible', 'true');
+        }
+        
+        if (distancia < 20) {
+          this.llegadaDestino(destinoActual);
         }
       }
 
@@ -266,7 +269,7 @@
         return (θ * 180 / Math.PI + 360) % 360;
       }
 
-      actualizarInterfaz(distancia, rumbo) {
+      actualizarInterfaz(distancia, rumbo, destino) {
         let distanciaTexto;
         if (distancia < 1000) {
           distanciaTexto = `${Math.round(distancia)} metros`;
@@ -274,38 +277,45 @@
           distanciaTexto = `${(distancia/1000).toFixed(1)} km`;
         }
 
+        const modoTexto = this.testMode ? '🔧 MODO PRUEBA' : '🌍 MODO REAL';
+        
         this.actualizarInfo(`
-          <strong>${this.destino.Nombre}</strong><br>
+          <strong>${destino.Nombre}</strong><br>
           📏 Distancia: ${distanciaTexto}<br>
           🧭 Dirección: ${Math.round(rumbo)}°<br>
-          <small>Busca el cubo rojo en AR</small>
+          <small>${modoTexto}</small>
         `);
+        
+        // Info de debug
+        if (this.debugDiv) {
+          this.debugDiv.innerHTML = `
+            Usuario: ${this.userPosition.coords.latitude.toFixed(6)}, ${this.userPosition.coords.longitude.toFixed(6)}<br>
+            Destino: ${destino.Latitud.toFixed(6)}, ${destino.Longitud.toFixed(6)}
+          `;
+        }
       }
 
-      actualizarFlechaDireccion(userLat, userLon, rumbo, distancia) {
-        if (!this.directionArrow) return;
-        
-        try {
-          // Colocar la flecha a 10 metros del usuario en la dirección del destino
-          const puntoFlecha = this.calcularPuntoCercano(userLat, userLon, rumbo, 10);
+      actualizarFlechasDireccion(userLat, userLon, rumbo, distancia) {
+        this.directionArrows.forEach((arrow, index) => {
+          if (!arrow) return;
           
-          this.directionArrow.setAttribute('gps-entity-place', {
-            latitude: puntoFlecha.lat,
-            longitude: puntoFlecha.lon
-          });
-          
-          // Rotar flecha hacia el destino
-          this.directionArrow.setAttribute('rotation', {
-            x: 0,
-            y: rumbo,
-            z: 0
-          });
-          
-          this.directionArrow.setAttribute('visible', 'true');
-          
-        } catch (error) {
-          console.warn('Error actualizando flecha:', error);
-        }
+          try {
+            // Colocar flechas a diferentes distancias (10m, 20m)
+            const distFlecha = 10 + (index * 10);
+            const puntoFlecha = this.calcularPuntoCercano(userLat, userLon, rumbo, distFlecha);
+            
+            arrow.setAttribute('gps-entity-place', {
+              latitude: puntoFlecha.lat,
+              longitude: puntoFlecha.lon
+            });
+            
+            arrow.setAttribute('rotation', { x: 0, y: rumbo, z: 0 });
+            arrow.setAttribute('visible', 'true');
+            
+          } catch (error) {
+            console.warn('Error actualizando flecha:', error);
+          }
+        });
       }
 
       calcularPuntoCercano(lat, lon, rumbo, distancia) {
@@ -326,21 +336,20 @@
         };
       }
 
-      llegadaDestino() {
+      llegadaDestino(destino) {
         this.actualizarInfo(`
           <div style="color: #4CAF50;">
             <strong>🎉 ¡Has llegado!</strong><br>
-            ${this.destino.Nombre}
+            ${destino.Nombre}
           </div>
         `);
         
-        if (this.directionArrow) {
-          this.directionArrow.setAttribute('visible', 'false');
-        }
+        this.directionArrows.forEach(arrow => {
+          if (arrow) arrow.setAttribute('visible', 'false');
+        });
         
         if (this.watchId) {
           navigator.geolocation.clearWatch(this.watchId);
-          this.watchId = null;
         }
         
         if (navigator.vibrate) {
@@ -373,7 +382,6 @@
       }
 
       mostrarError(mensaje) {
-        console.error('❌ Error:', mensaje);
         this.actualizarInfo(`<div style="color: #ff4444;">${mensaje}</div>`);
       }
 
@@ -384,18 +392,15 @@
       }
     }
 
-    // Inicializar cuando el DOM esté listo
     document.addEventListener('DOMContentLoaded', () => {
-      // Pequeño delay para que AR.js se inicialice
       setTimeout(() => {
-        window.simpleAR = new SimpleARNavigation();
+        window.arNavigation = new ARNavigationWithTestMode();
       }, 1000);
     });
 
-    // Cleanup al salir
     window.addEventListener('beforeunload', () => {
-      if (window.simpleAR) {
-        window.simpleAR.cleanup();
+      if (window.arNavigation) {
+        window.arNavigation.cleanup();
       }
     });
   </script>
