@@ -1,0 +1,30 @@
+<!DOCTYPE html>
+<html lang="es">
+<head>
+  <meta charset="UTF-8">
+  <title>Vista Mapa - WebWay</title>
+  <link rel="stylesheet" href="styles/styles.css">
+</head>
+<body>
+  <header>
+    <h1>Vista Mapa (Demo sin AR)</h1>
+  </header>
+  <main>
+    <div id="map" class="map-container"></div>
+  </main>
+
+  <script src="scripts/app.js"></script>
+  <script>
+    document.addEventListener("DOMContentLoaded", async () => {
+      const params = new URLSearchParams(window.location.search);
+      const destino = params.get("destino");
+      const pois = await fetch("data/pois.json").then(r => r.json());
+      const lugar = pois.find(p => p.id == destino);
+
+      if (!lugar) return alert("Destino no encontrado");
+      const mapDiv = document.getElementById("map");
+      mapDiv.innerHTML = `<h3>${lugar.Nombre}</h3><p>Lat: ${lugar.Latitud}<br>Lon: ${lugar.Longitud}</p>`;
+    });
+  </script>
+</body>
+</html>

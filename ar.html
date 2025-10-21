@@ -1,0 +1,56 @@
+<!doctype html>
+<html lang="es">
+<head>
+  <meta charset="utf-8" />
+  <title>Modo AR - WebWay</title>
+  <meta name="viewport" content="width=device-width,initial-scale=1" />
+
+  <!-- A-Frame estable -->
+  <script src="https://cdn.jsdelivr.net/npm/aframe@1.4.0/dist/aframe.min.js"></script>
+
+  <!-- AR.js versión estable compatible con A-Frame 1.4 -->
+  <script src="https://cdn.jsdelivr.net/gh/AR-js-org/AR.js@3.3.2/aframe/build/aframe-ar-nft.min.js"></script>
+
+  <!-- Plugin GPS -->
+  <script src="https://cdn.jsdelivr.net/npm/aframe-gps-entity-place@1.9.4/dist/aframe-gps-entity-place.min.js"></script>
+
+  <link rel="stylesheet" href="styles/styles.css">
+</head>rel="stylesheet" href="styles/styles.css">
+</head>
+<body style="margin:0;overflow:hidden;">
+
+  <!-- UI mínima -->
+  <div id="info" style="position:fixed;left:8px;top:8px;z-index:9999;background:rgba(255,255,255,0.95);padding:8px;border-radius:6px">
+    <strong id="infoTitle">Cargando AR…</strong>
+    <div id="infoBody" style="font-size:13px">Acepte cámara y ubicación.</div>
+  </div>
+
+  <!-- A-Frame scene -->
+  <a-scene
+    embedded
+    vr-mode-ui="enabled: false"
+    renderer="logarithmicDepthBuffer: true"
+    arjs="sourceType: webcam; debugUIEnabled: false; gpsMinDistance: 1;"
+    style="width:100vw;height:100vh"
+  >
+    <a-entity camera gps-camera rotation-reader></a-entity>
+
+    <!-- Flecha compuesta (primitiva) para evitar depender de modelos externos -->
+    <a-entity id="arrow" gps-entity-place="latitude: 0; longitude: 0;" visible="false" look-at="[gps-camera]">
+      <a-cylinder position="0 0.35 0" height="0.7" radius="0.05"></a-cylinder>
+      <a-cone position="0 0.9 0" height="0.5" radius-bottom="0.18"></a-cone>
+    </a-entity>
+  </a-scene>
+
+  <!-- Tu script: lógica de wayfinding -->
+  <script src="scripts/wayfinding.js"></script>
+
+  <script>
+    // Mensaje breve cuando A-Frame esté listo
+    document.addEventListener('DOMContentLoaded', ()=> {
+      const infoTitle = document.getElementById('infoTitle');
+      infoTitle.textContent = 'AR listo';
+    });
+  </script>
+</body>
+</html>
