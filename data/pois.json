@@ -1,8 +1,14 @@
 [
-  { "id": 0, "Nombre": "Bloque A", "Latitud": 4.6609819622582, "Longitud": -74.0596161549797 },
-  { "id": 1, "Nombre": "Bloque B", "Latitud": 4.6612256555812, "Longitud": -74.0595379523924 },
-  { "id": 4, "Nombre": "Bloque F", "Latitud": 4.6611701025415, "Longitud": -74.0597040270357 },
-  { "id": 6, "Nombre": "PRIME", "Latitud": 4.6615260954136, "Longitud": -74.0595618398411 },
-  { "id": 8, "Nombre": "Colores", "Latitud": 4.6612381266711, "Longitud": -74.0593889402125 },
-  { "id": 9, "Nombre": "Cafetería Principal", "Latitud": 4.6611156832330, "Longitud": -74.0595288524120 }
+  {
+    "id": 100,
+    "Nombre": "Punto Prueba Cercano", 
+    "Latitud": 4.5941736,
+    "Longitud": -74.154084
+  },
+  {
+    "id": 101, 
+    "Nombre": "Otro Punto Cercano",
+    "Latitud": 4.5943736,
+    "Longitud": -74.154284
+  }
 ]
