@@ -76,6 +76,7 @@ class App {
         window.location.href = `map.html?destino=${destino.id}`;
     }
 
+    // En app.js - función irAAR()
     irAAR() {
         const destino = this.obtenerDestinoSeleccionado();
         if (!destino) return;
@@ -87,6 +88,11 @@ class App {
                 window.location.href = 'ar.html';
             }
             return;
+        }
+
+        // Para AR real, necesitamos HTTPS
+        if (window.location.protocol !== 'https:' && !window.location.hostname.includes('localhost')) {
+            alert('Para AR necesitas HTTPS. Usando Vercel que ya lo tiene.');
         }
 
         localStorage.setItem('ar-destino', JSON.stringify(destino));
