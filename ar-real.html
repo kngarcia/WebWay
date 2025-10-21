@@ -1,0 +1,695 @@
+<!DOCTYPE html>
+<html lang="es">
+<head>
+  <meta charset="UTF-8">
+  <meta name="viewport" content="width=device-width, initial-scale=1.0, user-scalable=no">
+  <title>AR Real - WebWay</title>
+  
+  <!-- Three.js para 3D real -->
+  <script src="https://cdnjs.cloudflare.com/ajax/libs/three.js/r128/three.min.js"></script>
+  <!-- Controls para dispositivos móviles -->
+  <script src="https://cdn.jsdelivr.net/npm/three@0.128.0/examples/js/controls/DeviceOrientationControls.js"></script>
+  
+  <style>
+    body {
+      margin: 0;
+      padding: 0;
+      overflow: hidden;
+      background: #000;
+      font-family: Arial, sans-serif;
+    }
+    
+    #camera-container {
+      position: fixed;
+      top: 0;
+      left: 0;
+      width: 100vw;
+      height: 100vh;
+      z-index: 1;
+    }
+    
+    #camera-video {
+      width: 100%;
+      height: 100%;
+      object-fit: cover;
+    }
+    
+    #threejs-container {
+      position: fixed;
+      top: 0;
+      left: 0;
+      width: 100vw;
+      height: 100vh;
+      z-index: 2;
+      pointer-events: none;
+    }
+    
+    canvas {
+      display: block;
+    }
+    
+    .info-panel {
+      position: fixed;
+      bottom: 20px;
+      left: 50%;
+      transform: translateX(-50%);
+      background: rgba(0, 0, 0, 0.9);
+      color: white;
+      padding: 15px 20px;
+      border-radius: 15px;
+      z-index: 3;
+      max-width: 90%;
+      text-align: center;
+      backdrop-filter: blur(10px);
+      border: 1px solid rgba(255, 255, 255, 0.1);
+    }
+    
+    .btn {
+      padding: 12px 24px;
+      background: #4CAF50;
+      color: white;
+      border: none;
+      border-radius: 8px;
+      margin: 8px 5px;
+      cursor: pointer;
+      font-size: 16px;
+      pointer-events: auto;
+    }
+    
+    .btn-secondary {
+      background: #666;
+    }
+    
+    .debug-info {
+      font-size: 12px;
+      color: #ccc;
+      margin-top: 10px;
+      line-height: 1.4;
+    }
+    
+    .loading {
+      position: fixed;
+      top: 0;
+      left: 0;
+      width: 100%;
+      height: 100%;
+      background: #000;
+      color: white;
+      display: flex;
+      flex-direction: column;
+      justify-content: center;
+      align-items: center;
+      z-index: 1000;
+    }
+    
+    .spinner {
+      width: 50px;
+      height: 50px;
+      border: 5px solid #333;
+      border-top: 5px solid #4CAF50;
+      border-radius: 50%;
+      animation: spin 1s linear infinite;
+      margin-bottom: 20px;
+    }
+    
+    @keyframes spin {
+      0% { transform: rotate(0deg); }
+      100% { transform: rotate(360deg); }
+    }
+    
+    .permission-panel {
+      position: fixed;
+      top: 0;
+      left: 0;
+      width: 100%;
+      height: 100%;
+      background: rgba(0, 0, 0, 0.9);
+      color: white;
+      display: flex;
+      flex-direction: column;
+      justify-content: center;
+      align-items: center;
+      z-index: 1001;
+      padding: 20px;
+      text-align: center;
+    }
+  </style>
+</head>
+<body>
+  <!-- Video de la cámara -->
+  <div id="camera-container">
+    <video id="camera-video" autoplay playsinline></video>
+  </div>
+
+  <!-- Canvas de Three.js donde se dibuja la flecha 3D -->
+  <div id="threejs-container"></div>
+
+  <!-- Panel de información -->
+  <div id="info" class="info-panel">
+    <h3 style="margin: 0 0 10px 0;">🧭 AR Real</h3>
+    <p id="status-text">Inicializando...</p>
+    <div id="debug" class="debug-info"></div>
+    <button class="btn" onclick="window.location.href='index.html'">Volver</button>
+  </div>
+
+  <!-- Loading -->
+  <div id="loading" class="loading">
+    <div class="spinner"></div>
+    <p>Inicializando AR 3D...</p>
+  </div>
+
+  <!-- Panel de permisos -->
+  <div id="permission-panel" class="permission-panel" style="display: none;">
+    <h2>Permisos Requeridos</h2>
+    <p>Para que el AR funcione correctamente, necesitamos:</p>
+    <ul style="text-align: left; margin: 20px 0;">
+      <li>📍 Ubicación GPS</li>
+      <li>📷 Cámara trasera</li>
+      <li>🧭 Sensores de movimiento</li>
+    </ul>
+    <button class="btn" id="grant-permissions-btn">Otorgar Permisos</button>
+    <p id="permission-error" style="color: #ff6b6b; margin-top: 15px; display: none;"></p>
+  </div>
+
+  <script>
+    class RealAR {
+      constructor() {
+        // Three.js variables
+        this.scene = null;
+        this.camera = null;
+        this.renderer = null;
+        this.controls = null;
+        
+        // Elementos 3D
+        this.arrow = null;
+        this.targetMarker = null;
+        
+        // Datos de navegación
+        this.destino = null;
+        this.userPosition = null;
+        this.watchId = null;
+        
+        // Orientación
+        this.deviceOrientation = { alpha: 0, beta: 0, gamma: 0 };
+        this.currentHeading = 0;
+        this.targetBearing = 0;
+        this.currentDistance = 0;
+        
+        // Elementos DOM
+        this.infoDiv = null;
+        this.debugDiv = null;
+        this.statusText = null;
+        
+        this.init();
+      }
+
+      async init() {
+        try {
+          console.log('🚀 Iniciando AR Real...');
+          
+          await this.cargarDestino();
+          this.configurarElementosDOM();
+          
+          // Solicitar permisos
+          await this.solicitarPermisos();
+          
+          // Inicializar Three.js
+          this.inicializarThreeJS();
+          
+          // Iniciar sistemas
+          await this.iniciarCamara();
+          this.iniciarGPS();
+          this.iniciarOrientacion();
+          
+          // Iniciar render loop
+          this.animate();
+          
+          document.getElementById('loading').style.display = 'none';
+          
+        } catch (error) {
+          console.error('❌ Error:', error);
+          this.mostrarError('Error: ' + error.message);
+        }
+      }
+
+      async solicitarPermisos() {
+        return new Promise(async (resolve, reject) => {
+          try {
+            // Solicitar permisos de cámara
+            const stream = await navigator.mediaDevices.getUserMedia({ 
+              video: { facingMode: 'environment' },
+              audio: false 
+            });
+            
+            // Detener stream temporal (se usará en el video)
+            stream.getTracks().forEach(track => track.stop());
+            
+            // Solicitar permisos de orientación (especialmente para iOS)
+            if (typeof DeviceOrientationEvent.requestPermission === 'function') {
+              const permission = await DeviceOrientationEvent.requestPermission();
+              if (permission !== 'granted') {
+                throw new Error('Permisos de orientación denegados');
+              }
+            }
+            
+            resolve();
+            
+          } catch (error) {
+            this.mostrarPanelPermisos(error.message);
+            reject(error);
+          }
+        });
+      }
+
+      mostrarPanelPermisos(mensajeError = '') {
+        document.getElementById('loading').style.display = 'none';
+        const panel = document.getElementById('permission-panel');
+        const errorElem = document.getElementById('permission-error');
+        
+        if (mensajeError) {
+          errorElem.textContent = mensajeError;
+          errorElem.style.display = 'block';
+        }
+        
+        panel.style.display = 'flex';
+        
+        document.getElementById('grant-permissions-btn').onclick = async () => {
+          try {
+            await this.solicitarPermisos();
+            panel.style.display = 'none';
+            document.getElementById('loading').style.display = 'flex';
+          } catch (error) {
+            errorElem.textContent = 'Error: ' + error.message;
+            errorElem.style.display = 'block';
+          }
+        };
+      }
+
+      cargarDestino() {
+        return new Promise((resolve, reject) => {
+          try {
+            const destinoData = localStorage.getItem('ar-destino');
+            if (!destinoData) {
+              reject(new Error('No se encontró destino seleccionado'));
+              return;
+            }
+            
+            this.destino = JSON.parse(destinoData);
+            console.log('🎯 Destino:', this.destino);
+            this.actualizarEstado(`🎯 <b>${this.destino.Nombre}</b><br>Iniciando AR 3D...`);
+            resolve();
+            
+          } catch (error) {
+            reject(new Error('Error cargando destino: ' + error.message));
+          }
+        });
+      }
+
+      configurarElementosDOM() {
+        this.infoDiv = document.getElementById('info');
+        this.debugDiv = document.getElementById('debug');
+        this.statusText = document.getElementById('status-text');
+      }
+
+      inicializarThreeJS() {
+        // Configurar escena
+        this.scene = new THREE.Scene();
+        this.scene.fog = new THREE.Fog(0x000000, 1, 1000);
+
+        // Configurar cámara
+        this.camera = new THREE.PerspectiveCamera(75, window.innerWidth / window.innerHeight, 0.1, 1000);
+        this.camera.position.set(0, 1.6, 0); // Altura de ojos
+
+        // Configurar renderer
+        this.renderer = new THREE.WebGLRenderer({ 
+          alpha: true, 
+          antialias: true 
+        });
+        this.renderer.setSize(window.innerWidth, window.innerHeight);
+        this.renderer.setClearColor(0x000000, 0); // Transparente
+        this.renderer.domElement.style.position = 'fixed';
+        this.renderer.domElement.style.top = '0';
+        this.renderer.domElement.style.left = '0';
+        this.renderer.domElement.style.zIndex = '2';
+        
+        document.getElementById('threejs-container').appendChild(this.renderer.domElement);
+
+        // Configurar controles de orientación del dispositivo
+        this.controls = new THREE.DeviceOrientationControls(this.camera);
+        
+        // Crear flecha 3D
+        this.crearFlecha3D();
+        
+        // Configurar luces
+        this.configurarLuces();
+        
+        // Manejar redimensionado
+        window.addEventListener('resize', this.onWindowResize.bind(this));
+      }
+
+      crearFlecha3D() {
+        // Geometría de flecha más elaborada
+        const arrowGroup = new THREE.Group();
+
+        // Cuerpo de la flecha (cono)
+        const coneGeometry = new THREE.ConeGeometry(0.1, 0.8, 8);
+        const coneMaterial = new THREE.MeshPhongMaterial({ 
+          color: 0x4CAF50,
+          transparent: true,
+          opacity: 0.9
+        });
+        const cone = new THREE.Mesh(coneGeometry, coneMaterial);
+        cone.position.y = 0.4; // Mitad de la altura
+        cone.rotation.x = Math.PI; // Apuntar hacia adelante
+
+        // Base de la flecha (cilindro)
+        const cylinderGeometry = new THREE.CylinderGeometry(0.05, 0.05, 0.3, 8);
+        const cylinderMaterial = new THREE.MeshPhongMaterial({ 
+          color: 0x3366FF 
+        });
+        const cylinder = new THREE.Mesh(cylinderGeometry, cylinderMaterial);
+        cylinder.position.y = -0.15; // Debajo del cono
+
+        // Añadir al grupo
+        arrowGroup.add(cone);
+        arrowGroup.add(cylinder);
+
+        // Posicionar la flecha frente a la cámara
+        arrowGroup.position.set(0, 0, -3); // 3 metros adelante
+        arrowGroup.visible = false;
+
+        this.arrow = arrowGroup;
+        this.scene.add(this.arrow);
+
+        console.log('✅ Flecha 3D creada');
+      }
+
+      configurarLuces() {
+        // Luz ambiental
+        const ambientLight = new THREE.AmbientLight(0xffffff, 0.6);
+        this.scene.add(ambientLight);
+
+        // Luz direccional
+        const directionalLight = new THREE.DirectionalLight(0xffffff, 0.8);
+        directionalLight.position.set(10, 10, 5);
+        this.scene.add(directionalLight);
+      }
+
+      async iniciarCamara() {
+        try {
+          console.log('📷 Iniciando cámara...');
+          
+          const stream = await navigator.mediaDevices.getUserMedia({ 
+            video: {
+              facingMode: 'environment',
+              width: { ideal: 1280 },
+              height: { ideal: 720 }
+            },
+            audio: false
+          });
+          
+          const video = document.getElementById('camera-video');
+          video.srcObject = stream;
+          
+          await new Promise((resolve) => {
+            video.onloadedmetadata = () => {
+              video.play();
+              resolve();
+            };
+          });
+          
+          console.log('✅ Cámara iniciada correctamente');
+          
+        } catch (error) {
+          console.error('❌ Error de cámara:', error);
+          throw new Error(this.getCameraErrorMessage(error));
+        }
+      }
+
+      getCameraErrorMessage(error) {
+        switch(error.name) {
+          case 'NotAllowedError':
+            return 'Permiso de cámara denegado.';
+          case 'NotFoundError':
+            return 'No se encontró cámara trasera.';
+          default:
+            return 'Error de cámara: ' + error.message;
+        }
+      }
+
+      iniciarGPS() {
+        if (!navigator.geolocation) {
+          this.mostrarError('Geolocalización no soportada');
+          return;
+        }
+
+        console.log('🌍 Iniciando GPS...');
+        
+        this.watchId = navigator.geolocation.watchPosition(
+          (position) => this.actualizarPosicionUsuario(position),
+          (error) => this.manejarErrorGPS(error),
+          {
+            enableHighAccuracy: true,
+            timeout: 15000,
+            maximumAge: 5000
+          }
+        );
+      }
+
+      iniciarOrientacion() {
+        if (typeof DeviceOrientationEvent === 'undefined') {
+          this.mostrarError('Orientación del dispositivo no soportada');
+          return;
+        }
+
+        window.addEventListener('deviceorientation', (event) => {
+          this.deviceOrientation = {
+            alpha: event.alpha || 0,
+            beta: event.beta || 0,
+            gamma: event.gamma || 0
+          };
+          
+          // Calcular heading basado en alpha (brújula)
+          if (event.alpha !== null) {
+            this.currentHeading = event.alpha;
+          }
+        });
+
+        console.log('🧭 Sensores de orientación iniciados');
+      }
+
+      actualizarPosicionUsuario(position) {
+        this.userPosition = position;
+        const userLat = position.coords.latitude;
+        const userLon = position.coords.longitude;
+        const accuracy = position.coords.accuracy;
+        
+        this.currentDistance = this.calcularDistancia(userLat, userLon, this.destino.Latitud, this.destino.Longitud);
+        this.targetBearing = this.calcularRumbo(userLat, userLon, this.destino.Latitud, this.destino.Longitud);
+        
+        this.actualizarInterfaz(this.currentDistance, this.targetBearing, accuracy);
+        this.actualizarFlecha3D();
+        
+        if (this.currentDistance < 10) {
+          this.llegadaDestino();
+        }
+      }
+
+      calcularDistancia(lat1, lon1, lat2, lon2) {
+        const R = 6371e3;
+        const φ1 = lat1 * Math.PI / 180;
+        const φ2 = lat2 * Math.PI / 180;
+        const Δφ = (lat2 - lat1) * Math.PI / 180;
+        const Δλ = (lon2 - lon1) * Math.PI / 180;
+
+        const a = Math.sin(Δφ/2) * Math.sin(Δφ/2) +
+                 Math.cos(φ1) * Math.cos(φ2) *
+                 Math.sin(Δλ/2) * Math.sin(Δλ/2);
+        const c = 2 * Math.atan2(Math.sqrt(a), Math.sqrt(1-a));
+
+        return R * c;
+      }
+
+      calcularRumbo(lat1, lon1, lat2, lon2) {
+        const φ1 = lat1 * Math.PI / 180;
+        const φ2 = lat2 * Math.PI / 180;
+        const Δλ = (lon2 - lon1) * Math.PI / 180;
+
+        const y = Math.sin(Δλ) * Math.cos(φ2);
+        const x = Math.cos(φ1) * Math.sin(φ2) -
+                 Math.sin(φ1) * Math.cos(φ2) * Math.cos(Δλ);
+        const θ = Math.atan2(y, x);
+
+        return (θ * 180 / Math.PI + 360) % 360;
+      }
+
+      actualizarInterfaz(distancia, rumbo, accuracy) {
+        let distanciaTexto;
+        if (distancia < 1000) {
+          distanciaTexto = `${Math.round(distancia)} m`;
+        } else {
+          distanciaTexto = `${(distancia/1000).toFixed(1)} km`;
+        }
+
+        this.actualizarEstado(`
+          <b>${this.destino.Nombre}</b><br>
+          📏 ${distanciaTexto} · 🧭 ${Math.round(rumbo)}°<br>
+          <small>Precisión: ±${Math.round(accuracy)}m</small>
+        `);
+        
+        // Debug info
+        if (this.debugDiv) {
+          this.debugDiv.innerHTML = `
+            Usuario: ${this.userPosition.coords.latitude.toFixed(6)}, ${this.userPosition.coords.longitude.toFixed(6)}<br>
+            Destino: ${this.destino.Latitud.toFixed(6)}, ${this.destino.Longitud.toFixed(6)}<br>
+            Distancia: ${Math.round(distancia)}m | Rumbo: ${Math.round(rumbo)}°<br>
+            Heading: ${Math.round(this.currentHeading)}°
+          `;
+        }
+      }
+
+      actualizarFlecha3D() {
+        if (!this.arrow || this.targetBearing === undefined || this.currentHeading === undefined) {
+          return;
+        }
+
+        // Calcular rotación relativa
+        let relativeBearing = this.targetBearing - this.currentHeading;
+        
+        // Ajustar para rango [-180, 180]
+        if (relativeBearing > 180) relativeBearing -= 360;
+        if (relativeBearing < -180) relativeBearing += 360;
+        
+        // Convertir a radianes y rotar flecha
+        const rotationY = THREE.MathUtils.degToRad(relativeBearing);
+        this.arrow.rotation.y = rotationY;
+        
+        // Hacer visible
+        this.arrow.visible = true;
+        
+        // Cambiar color basado en alineación
+        this.actualizarColorFlecha(Math.abs(relativeBearing));
+      }
+
+      actualizarColorFlecha(angleDiff) {
+        if (!this.arrow) return;
+        
+        const cone = this.arrow.children[0];
+        const cylinder = this.arrow.children[1];
+        
+        let color;
+        if (angleDiff < 10) {
+          color = 0x4CAF50; // Verde
+        } else if (angleDiff < 30) {
+          color = 0xFF9800; // Naranja
+        } else {
+          color = 0xF44336; // Rojo
+        }
+        
+        cone.material.color.setHex(color);
+        cylinder.material.color.setHex(color);
+      }
+
+      animate() {
+        requestAnimationFrame(this.animate.bind(this));
+        
+        // Actualizar controles de orientación
+        if (this.controls) {
+          this.controls.update();
+        }
+        
+        // Renderizar escena
+        if (this.renderer && this.scene && this.camera) {
+          this.renderer.render(this.scene, this.camera);
+        }
+      }
+
+      onWindowResize() {
+        if (this.camera && this.renderer) {
+          this.camera.aspect = window.innerWidth / window.innerHeight;
+          this.camera.updateProjectionMatrix();
+          this.renderer.setSize(window.innerWidth, window.innerHeight);
+        }
+      }
+
+      llegadaDestino() {
+        this.actualizarEstado(`
+          <div style="color: #4CAF50; font-weight: bold;">
+            🎉 ¡HAS LLEGADO!<br>
+            ${this.destino.Nombre}
+          </div>
+        `);
+        
+        if (this.arrow) {
+          this.arrow.visible = false;
+        }
+        
+        if (this.watchId) {
+          navigator.geolocation.clearWatch(this.watchId);
+          this.watchId = null;
+        }
+        
+        // Vibración
+        if (navigator.vibrate) {
+          navigator.vibrate([300, 100, 300, 100, 300]);
+        }
+      }
+
+      actualizarEstado(mensaje) {
+        if (this.statusText) {
+          this.statusText.innerHTML = mensaje;
+        }
+      }
+
+      manejarErrorGPS(error) {
+        let mensaje = 'Error GPS: ';
+        switch(error.code) {
+          case error.PERMISSION_DENIED:
+            mensaje = 'Permiso de ubicación denegado. Activa la ubicación.';
+            break;
+          case error.POSITION_UNAVAILABLE:
+            mensaje = 'Ubicación no disponible. Verifica tu GPS.';
+            break;
+          case error.TIMEOUT:
+            mensaje = 'Tiempo de espera agotado.';
+            break;
+          default:
+            mensaje = 'Error de GPS: ' + error.message;
+        }
+        this.mostrarError(mensaje);
+      }
+
+      mostrarError(mensaje) {
+        console.error('❌ Error:', mensaje);
+        this.actualizarEstado(`<div style="color: #ff4444;">${mensaje}</div>`);
+      }
+
+      cleanup() {
+        if (this.watchId) {
+          navigator.geolocation.clearWatch(this.watchId);
+        }
+        if (this.renderer) {
+          this.renderer.dispose();
+        }
+        const video = document.getElementById('camera-video');
+        if (video.srcObject) {
+          video.srcObject.getTracks().forEach(track => track.stop());
+        }
+      }
+    }
+
+    // Inicializar cuando el DOM esté listo
+    document.addEventListener('DOMContentLoaded', () => {
+      console.log('🚀 Iniciando AR Real...');
+      window.realAR = new RealAR();
+    });
+
+    // Cleanup al salir
+    window.addEventListener('beforeunload', () => {
+      if (window.realAR) {
+        window.realAR.cleanup();
+      }
+    });
+  </script>
+</body>
+</html>
